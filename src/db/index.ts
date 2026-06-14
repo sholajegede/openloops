@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { RawEvent, Session, IntentThread } from "../types";
+import type { RawEvent, Session, IntentThread, Brand } from "../types";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -30,10 +30,14 @@ interface OpenloopsDB extends DBSchema {
     value: IntentThread;
     indexes: { by_lastSeen: number };
   };
+  domain_brands: {
+    key: string;
+    value: Brand;
+  };
 }
 
 const DB_NAME = "openloops";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 // ---------------------------------------------------------------------------
 // Connection (singleton promise — safe to call from any module)
@@ -59,6 +63,10 @@ export function getDB(): Promise<IDBPDatabase<OpenloopsDB>> {
         if (!db.objectStoreNames.contains("intent_threads")) {
           const s = db.createObjectStore("intent_threads", { keyPath: "id" });
           s.createIndex("by_lastSeen", "lastSeen");
+        }
+        // Pass 3 store
+        if (!db.objectStoreNames.contains("domain_brands")) {
+          db.createObjectStore("domain_brands", { keyPath: "domain" });
         }
       },
     });
@@ -183,4 +191,41 @@ export async function getAllThreads(): Promise<IntentThread[]> {
 export async function getThreadCount(): Promise<number> {
   const db = await getDB();
   return db.count("intent_threads");
+}
+
+// ---------------------------------------------------------------------------
+// domain_brands helpers
+// ---------------------------------------------------------------------------
+
+/** Retrieve a cached brand record by domain, or undefined if not yet fetched. */
+export async function getBrand(domain: string): Promise<Brand | undefined> {
+  const db = await getDB();
+  return db.get("domain_brands", domain);
+}
+
+/** Write (or overwrite) a batch of Brand records. Idempotent via IDB put. */
+export async function putBrands(brands: Brand[]): Promise<void> {
+  if (brands.length === 0) return;
+  const db = await getDB();
+  const tx = db.transaction("domain_brands", "readwrite");
+  await Promise.all([...brands.map((b) => tx.store.put(b)), tx.done]);
+}
+
+/** Every cached brand record. */
+export async function getAllBrands(): Promise<Brand[]> {
+  const db = await getDB();
+  return db.getAll("domain_brands");
+}
+
+/** Set of all domain names already resolved and cached. */
+export async function getCachedDomains(): Promise<Set<string>> {
+  const db = await getDB();
+  const keys = await db.getAllKeys("domain_brands");
+  return new Set(keys);
+}
+
+/** Wipe all cached brand records. */
+export async function clearBrands(): Promise<void> {
+  const db = await getDB();
+  return db.clear("domain_brands");
 }

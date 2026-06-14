@@ -704,3 +704,39 @@ button { cursor: pointer; }
   color: #f87171;
   line-height: 1.4;
 }
+
+/* ── Rail key note (privacy disclosure under context.dev input) ── */
+
+.rail-key-note {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-3);
+  line-height: 1.45;
+  padding: 0 2px;
+}
+
+/* ── Main column footer ── */
+
+.main-footer {
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.brand-credit {
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  color: var(--text-3);
+}
+
+.brand-credit-link {
+  color: var(--text-3);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1px;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.brand-credit-link:hover {
+  color: var(--text-2);
+  border-color: var(--border-strong);
+}

@@ -5,7 +5,11 @@
   "description": "Reconstruct your browsing history into an AI a map of intent threads: active decisions, stalled research, questions. Fully local.",
 
   "permissions": ["history", "tabs", "storage"],
-  "host_permissions": ["https://api.anthropic.com/*"],
+  "host_permissions": [
+    "https://api.anthropic.com/*",
+    "https://api.context.dev/*",
+    "https://logos.context.dev/*"
+  ],
 
   "background": {
     "service_worker": "src/background.ts",

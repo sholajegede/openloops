@@ -3,7 +3,8 @@ import { backfillHistory } from "../pipeline/backfill";
 import { buildSessions } from "../pipeline/sessions";
 import { buildThreads } from "../pipeline/threads";
 import { labelThreads } from "../pipeline/label";
-import { getApiKey, setApiKey } from "../lib/settings";
+import { enrichDomains } from "../pipeline/enrich";
+import { getApiKey, setApiKey, getContextKey, setContextKey } from "../lib/settings";
 import {
   getEventCount,
   getRecentEvents,
@@ -11,8 +12,9 @@ import {
   getSessionCount,
   getAllThreads,
   getThreadCount,
+  getAllBrands,
 } from "../db/index";
-import type { RawEvent, Session, IntentThread } from "../types";
+import type { RawEvent, Session, IntentThread, Brand } from "../types";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -52,24 +54,38 @@ function formatDuration(startedAt: number, endedAt: number): string {
 
 
 // ---------------------------------------------------------------------------
-// DomainChip — monogram placeholder, ready for logo swap in pass 3
+// DomainChip — shows brand logo when enriched, monogram fallback otherwise
 // ---------------------------------------------------------------------------
 
 interface DomainChipProps {
   domain: string;
-  logoUrl?: string;     // pass 3: swap in a real favicon/logo
-  brandColor?: string;  // pass 3: tint the icon bg with the brand color
+  logoUrl?: string;
+  brandColor?: string;
 }
 
 function DomainChip({ domain, logoUrl, brandColor }: DomainChipProps) {
-  const iconStyle = brandColor ? { background: brandColor + "22" } : undefined;
+  const [logoFailed, setLogoFailed] = useState(false);
+  const showLogo = !!logoUrl && !logoFailed;
+
+  const iconStyle = brandColor ? { background: brandColor + "1a" } : undefined;
+  // Subtle inset-left accent — doesn't affect layout, keeps it restrained.
+  const chipStyle: React.CSSProperties | undefined = brandColor
+    ? { boxShadow: `inset 2px 0 0 ${brandColor}88` }
+    : undefined;
+
   return (
-    <span className="domain-chip">
+    <span className="domain-chip" style={chipStyle}>
       <span className="domain-chip-icon" style={iconStyle}>
-        {logoUrl
-          ? <img src={logoUrl} alt="" className="domain-chip-logo" />
-          : <span className="domain-chip-monogram">{domain[0].toUpperCase()}</span>
-        }
+        {showLogo ? (
+          <img
+            src={logoUrl}
+            alt=""
+            className="domain-chip-logo"
+            onError={() => setLogoFailed(true)}
+          />
+        ) : (
+          <span className="domain-chip-monogram">{domain[0].toUpperCase()}</span>
+        )}
       </span>
       <span className="domain-chip-label">{domain}</span>
     </span>
@@ -80,7 +96,7 @@ function DomainChip({ domain, logoUrl, brandColor }: DomainChipProps) {
 // ThreadCard
 // ---------------------------------------------------------------------------
 
-function ThreadCard({ thread }: { thread: IntentThread }) {
+function ThreadCard({ thread, brands }: { thread: IntentThread; brands: Map<string, Brand> }) {
   const totalEvents = thread.sessions.reduce((n, s) => n + s.events.length, 0);
   const topDomains  = [...new Set(thread.sessions.flatMap((s) => s.domains))].slice(0, 4);
   const allKeywords = [...new Set(thread.sessions.flatMap((s) => s.keywords))].slice(0, 8);
@@ -121,7 +137,14 @@ function ThreadCard({ thread }: { thread: IntentThread }) {
       {/* ── Domain chips ── */}
       {topDomains.length > 0 && (
         <div className="domain-chips">
-          {topDomains.map((d) => <DomainChip key={d} domain={d} />)}
+          {topDomains.map((d) => (
+            <DomainChip
+              key={d}
+              domain={d}
+              logoUrl={brands.get(d)?.logoUrl}
+              brandColor={brands.get(d)?.brandColor}
+            />
+          ))}
         </div>
       )}
 
@@ -206,6 +229,12 @@ export default function App() {
   const [threads, setThreads]                   = useState<IntentThread[]>([]);
   const [buildingThreads, setBuildingThreads]   = useState(false);
 
+  // Brand enrichment
+  const [contextKey, setContextKeyState]       = useState("");
+  const [contextKeySaved, setContextKeySaved]  = useState(false);
+  const [enriching, setEnriching]              = useState(false);
+  const [brands, setBrands]                    = useState<Map<string, Brand>>(new Map());
+
   // AI labeling
   const [apiKey, setApiKeyState]   = useState("");
   const [keySaved, setKeySaved]    = useState(false);
@@ -223,6 +252,12 @@ export default function App() {
     void refreshAll();
     void getApiKey().then((saved) => {
       if (saved) { setApiKeyState(saved); setKeySaved(true); }
+    });
+    void getContextKey().then((saved) => {
+      if (saved) { setContextKeyState(saved); setContextKeySaved(true); }
+    });
+    void getAllBrands().then((all) => {
+      setBrands(new Map(all.map((b) => [b.domain, b])));
     });
   }, []);
 
@@ -272,21 +307,49 @@ export default function App() {
     } finally { setBuildingThreads(false); }
   }
 
+  async function handleSaveContextKey() {
+    await setContextKey(contextKey.trim());
+    setContextKeySaved(true);
+  }
+
   async function handleSaveKey() {
     await setApiKey(apiKey.trim());
     setKeySaved(true);
     setLabelError(null);
   }
 
-  async function handleLabel() {
-    setLabeling(true);
+  async function handleEnrichAndLabel() {
     setLabelError(null);
+
+    // Enrichment phase — skip gracefully if no context.dev key is saved.
+    if (contextKey.trim() && contextKeySaved) {
+      setEnriching(true);
+      try {
+        const allDomains = [...new Set(
+          threads.flatMap((t) => t.sessions.flatMap((s) => s.domains))
+        )];
+        await enrichDomains(contextKey.trim(), allDomains);
+        // Reload brand cache into state so chips update immediately.
+        const all = await getAllBrands();
+        setBrands(new Map(all.map((b) => [b.domain, b])));
+      } catch (err) {
+        // Enrichment failure is non-fatal — log and proceed to labeling.
+        console.warn("[openloops] enrichment failed:", err);
+      } finally {
+        setEnriching(false);
+      }
+    }
+
+    // Labeling phase — requires the Anthropic key.
+    setLabeling(true);
     try {
       await labelThreads(apiKey.trim());
       setThreads(await getAllThreads());
     } catch (err) {
       setLabelError(err instanceof Error ? err.message : "Labeling failed.");
-    } finally { setLabeling(false); }
+    } finally {
+      setLabeling(false);
+    }
   }
 
   function toggleStatus(s: IntentThread["status"]) {
@@ -363,14 +426,37 @@ export default function App() {
           </button>
         </div>
 
-        {/* AI labeling */}
+        {/* Intelligence */}
         <div className="rail-section">
           <div className="rail-eyebrow">Intelligence</div>
           <div className="rail-key-area">
+
+            {/* context.dev key */}
             <input
               className="rail-key-input"
               type="password"
-              placeholder="sk-ant-…"
+              placeholder="ctxt_secret_… (context.dev)"
+              value={contextKey}
+              onChange={(e) => { setContextKeyState(e.target.value); setContextKeySaved(false); }}
+            />
+            <div className="rail-key-btns">
+              <button
+                className="rail-btn"
+                onClick={handleSaveContextKey}
+                disabled={!contextKey.trim() || contextKeySaved}
+              >
+                {contextKeySaved ? "Saved ✓" : "Save key"}
+              </button>
+            </div>
+            <p className="rail-key-note">
+              Enrichment sends domain names (not URLs or history) to context.dev.
+            </p>
+
+            {/* Anthropic key */}
+            <input
+              className="rail-key-input"
+              type="password"
+              placeholder="sk-ant-… (Anthropic)"
               value={apiKey}
               onChange={(e) => { setApiKeyState(e.target.value); setKeySaved(false); }}
             />
@@ -384,10 +470,10 @@ export default function App() {
               </button>
               <button
                 className="rail-btn rail-btn-accent"
-                onClick={handleLabel}
-                disabled={labeling || !keySaved || threads.length === 0}
+                onClick={handleEnrichAndLabel}
+                disabled={enriching || labeling || !keySaved || threads.length === 0}
               >
-                {labeling ? "Labeling…" : "Label with AI"}
+                {enriching ? "Enriching…" : labeling ? "Labeling…" : "Label & enrich"}
               </button>
             </div>
             {labelError && <p className="label-error">{labelError}</p>}
@@ -442,7 +528,7 @@ export default function App() {
                     </h2>
                   </div>
                   <ul className="thread-list">
-                    {items.map((t) => <ThreadCard key={t.id} thread={t} />)}
+                    {items.map((t) => <ThreadCard key={t.id} thread={t} brands={brands} />)}
                   </ul>
                 </section>
               );
@@ -508,6 +594,20 @@ export default function App() {
             )}
           </div>
         </div>
+
+        <footer className="main-footer">
+          <span className="brand-credit">
+            brand data by{" "}
+            <a
+              href="https://context.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="brand-credit-link"
+            >
+              context.dev
+            </a>
+          </span>
+        </footer>
       </main>
     </div>
   );

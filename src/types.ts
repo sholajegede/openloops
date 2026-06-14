@@ -32,3 +32,12 @@ export interface IntentThread {
   distinctDays: number;
   signals: string[];
 }
+
+export interface Brand {
+  domain: string;
+  name: string;
+  description: string;
+  industry: string;
+  logoUrl: string;
+  brandColor: string;
+}

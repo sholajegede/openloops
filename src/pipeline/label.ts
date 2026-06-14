@@ -1,4 +1,4 @@
-import { getAllThreads, putThreads } from "../db/index";
+import { getAllThreads, putThreads, getAllBrands } from "../db/index";
 import type { IntentThread } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -10,6 +10,7 @@ interface ThreadDescriptor {
   keywords: string[];
   domains: string[];
   sampleTitles: string[];
+  domainContext: string[];  // "stripe.com: Stripe — Online payments (Fintech)"
 }
 
 interface LabelResult {
@@ -45,16 +46,35 @@ export async function labelThreads(apiKey: string): Promise<{ labeled: number }>
   const threads = await getAllThreads();
   if (threads.length === 0) return { labeled: 0 };
 
+  // Load any cached brand records so descriptors can include company context.
+  const allBrands = await getAllBrands();
+  const brandMap = new Map(allBrands.map((b) => [b.domain, b]));
+
   // Build compact descriptors — only what Claude needs to understand each thread.
   const descriptors: ThreadDescriptor[] = threads.map((t) => {
     const keywords = [...new Set(t.sessions.flatMap((s) => s.keywords))].slice(0, 8);
     const domains  = [...new Set(t.sessions.flatMap((s) => s.domains))].slice(0, 5);
     const titles   = [...new Set(t.sessions.flatMap((s) => s.events.map((e) => e.title)))].slice(0, 20);
-    return { id: t.id, keywords, domains, sampleTitles: titles };
+
+    // Compact company context grounded in enriched brand records.
+    // e.g. "stripe.com: Stripe — Online payment processing for internet businesses (Fintech)"
+    const domainContext = domains
+      .map((d) => {
+        const brand = brandMap.get(d);
+        if (!brand || !brand.name) return null;
+        let line = `${d}: ${brand.name}`;
+        if (brand.description) line += ` — ${brand.description}`;
+        if (brand.industry)    line += ` (${brand.industry})`;
+        return line;
+      })
+      .filter((s): s is string => s !== null);
+
+    return { id: t.id, keywords, domains, sampleTitles: titles, domainContext };
   });
 
   const systemPrompt = `You label browsing intent threads. Return ONLY a JSON array — no markdown fences, no explanation.
 Each element: { "id": "<thread id>", "title": "<3-6 word title>", "summary": "<1 sentence>", "type": "<buying|research|learning|planning|unclassified>" }
+Each thread descriptor may include a "domainContext" array of company descriptions for the sites visited. When present, use these to produce sharper, more specific titles and summaries grounded in what each company actually does.
 Respond with exactly one array covering every thread in the request.`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {

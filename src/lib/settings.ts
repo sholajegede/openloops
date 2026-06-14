@@ -1,5 +1,4 @@
-// Persist and retrieve the user's Anthropic API key.
-// Stored in chrome.storage.local so it never leaves the device.
+// Persist and retrieve API keys in chrome.storage.local so they never leave the device.
 
 export async function getApiKey(): Promise<string | null> {
   const result = await chrome.storage.local.get("anthropicApiKey");
@@ -8,4 +7,13 @@ export async function getApiKey(): Promise<string | null> {
 
 export async function setApiKey(key: string): Promise<void> {
   await chrome.storage.local.set({ anthropicApiKey: key });
+}
+
+export async function getContextKey(): Promise<string | null> {
+  const result = await chrome.storage.local.get("contextDevApiKey");
+  return (result.contextDevApiKey as string) ?? null;
+}
+
+export async function setContextKey(key: string): Promise<void> {
+  await chrome.storage.local.set({ contextDevApiKey: key });
 }
