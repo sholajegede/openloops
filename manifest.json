@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "openloops",
   "version": "0.0.1",
-  "description": "Reconstruct your browsing history into a map of intent threads: active decisions, stalled research, open questions. Runs entirely on-device.",
+  "description": "Reconstruct your browsing history into an AI a map of intent threads: active decisions, stalled research, questions. Fully local.",
 
   "permissions": ["history", "tabs", "storage"],
   "host_permissions": ["https://api.anthropic.com/*"],
@@ -14,7 +14,18 @@
 
   "options_page": "src/dashboard/index.html",
 
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
   "action": {
-    "default_title": "Open Signal"
+    "default_title": "OpenLoops",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   }
 }

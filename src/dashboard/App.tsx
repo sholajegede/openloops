@@ -50,99 +50,98 @@ function formatDuration(startedAt: number, endedAt: number): string {
   return `${h}h ${m}m`;
 }
 
-// ---------------------------------------------------------------------------
-// Type badge and status pill metadata
-// ---------------------------------------------------------------------------
-
-const TYPE_COLORS: Record<IntentThread["type"], string> = {
-  buying:       "#d97706",
-  learning:     "#0891b2",
-  research:     "#7c3aed",
-  planning:     "#059669",
-  unclassified: "#525252",
-};
-
-const STATUS_COLORS: Record<IntentThread["status"], string> = {
-  active:  "#16a34a",
-  stalled: "#ca8a04",
-  dormant: "#525252",
-};
 
 // ---------------------------------------------------------------------------
-// Thread card
+// DomainChip — monogram placeholder, ready for logo swap in pass 3
+// ---------------------------------------------------------------------------
+
+interface DomainChipProps {
+  domain: string;
+  logoUrl?: string;     // pass 3: swap in a real favicon/logo
+  brandColor?: string;  // pass 3: tint the icon bg with the brand color
+}
+
+function DomainChip({ domain, logoUrl, brandColor }: DomainChipProps) {
+  const iconStyle = brandColor ? { background: brandColor + "22" } : undefined;
+  return (
+    <span className="domain-chip">
+      <span className="domain-chip-icon" style={iconStyle}>
+        {logoUrl
+          ? <img src={logoUrl} alt="" className="domain-chip-logo" />
+          : <span className="domain-chip-monogram">{domain[0].toUpperCase()}</span>
+        }
+      </span>
+      <span className="domain-chip-label">{domain}</span>
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ThreadCard
 // ---------------------------------------------------------------------------
 
 function ThreadCard({ thread }: { thread: IntentThread }) {
   const totalEvents = thread.sessions.reduce((n, s) => n + s.events.length, 0);
   const topDomains  = [...new Set(thread.sessions.flatMap((s) => s.domains))].slice(0, 4);
+  const allKeywords = [...new Set(thread.sessions.flatMap((s) => s.keywords))].slice(0, 8);
 
   return (
     <li className="thread-card">
-      {/* ── Title row ── */}
+
+      {/* ── Title + type/status ── */}
       <div className="thread-header">
-        <h3 className="thread-title">{thread.title}</h3>
-        <div className="thread-badges">
-          <span
-            className="badge type-badge"
-            style={{ background: TYPE_COLORS[thread.type] + "22", color: TYPE_COLORS[thread.type] }}
-          >
-            {thread.type}
-          </span>
-          <span
-            className="badge status-badge"
-            style={{ background: STATUS_COLORS[thread.status] + "22", color: STATUS_COLORS[thread.status] }}
-          >
-            {thread.status}
+        <div className="thread-title-block">
+          <h3 className="thread-title">{thread.title}</h3>
+          {thread.summary && <p className="thread-summary">{thread.summary}</p>}
+        </div>
+        <div className="thread-label-group">
+          <span className="thread-type-label">{thread.type.toUpperCase()}</span>
+          <span className={`thread-status-pill thread-status-pill-${thread.status}`}>
+            {thread.status.toUpperCase()}
           </span>
         </div>
       </div>
-
-      {thread.summary && <p className="thread-summary">{thread.summary}</p>}
 
       {/* ── Confidence bar ── */}
       <div className="confidence-row">
         <div className="confidence-bar-track">
-          <div
-            className="confidence-bar-fill"
-            style={{ width: `${thread.confidence * 100}%` }}
-          />
+          <div className="confidence-bar-fill" style={{ width: `${thread.confidence * 100}%` }} />
         </div>
         <span className="confidence-pct">{Math.round(thread.confidence * 100)}%</span>
       </div>
 
-      {/* ── Stats row ── */}
-      <div className="thread-stats">
-        <span>{thread.sessions.length} session{thread.sessions.length !== 1 ? "s" : ""}</span>
-        <span>·</span>
-        <span>{totalEvents} events</span>
-        <span>·</span>
-        <span>{thread.distinctDays} day{thread.distinctDays !== 1 ? "s" : ""}</span>
-        <span>·</span>
-        <span>{relativeTime(thread.lastSeen)}</span>
-      </div>
+      {/* ── Meta row ── */}
+      <p className="thread-meta">
+        {thread.sessions.length} session{thread.sessions.length !== 1 ? "s" : ""}
+        {" · "}{totalEvents} event{totalEvents !== 1 ? "s" : ""}
+        {" · "}{thread.distinctDays} day{thread.distinctDays !== 1 ? "s" : ""}
+        {" · "}{relativeTime(thread.lastSeen)}
+      </p>
 
-      {/* ── Domains ── */}
-      <div className="thread-domains">
-        {topDomains.map((d) => (
-          <span key={d} className="session-domain">{d}</span>
-        ))}
-      </div>
+      {/* ── Domain chips ── */}
+      {topDomains.length > 0 && (
+        <div className="domain-chips">
+          {topDomains.map((d) => <DomainChip key={d} domain={d} />)}
+        </div>
+      )}
 
       {/* ── Keywords ── */}
-      {thread.sessions.flatMap((s) => s.keywords).length > 0 && (
+      {allKeywords.length > 0 && (
         <div className="keyword-tags">
-          {[...new Set(thread.sessions.flatMap((s) => s.keywords))].slice(0, 8).map((kw) => (
+          {allKeywords.map((kw) => (
             <span key={kw} className="keyword-tag">{kw}</span>
           ))}
         </div>
       )}
 
-      {/* ── Signals (why) ── */}
-      <ul className="signals-list">
-        {thread.signals.map((sig) => (
-          <li key={sig} className="signal-item">{sig}</li>
-        ))}
-      </ul>
+      {/* ── Signals ── */}
+      {thread.signals.length > 0 && (
+        <ul className="signals-list">
+          {thread.signals.map((sig) => (
+            <li key={sig} className="signal-item">{sig}</li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }
@@ -179,31 +178,46 @@ function SessionRow({ session }: { session: Session }) {
 }
 
 // ---------------------------------------------------------------------------
-// Main component
+// Constants
+// ---------------------------------------------------------------------------
+
+const ALL_STATUSES: IntentThread["status"][] = ["active", "stalled", "dormant"];
+
+const STATUS_DOT_CLASS: Record<IntentThread["status"], string> = {
+  active:  "dot-active",
+  stalled: "dot-stalled",
+  dormant: "dot-dormant",
+};
+
+// ---------------------------------------------------------------------------
+// App
 // ---------------------------------------------------------------------------
 
 export default function App() {
-  // Raw events
-  const [eventCount, setEventCount]   = useState<number | null>(null);
-  const [recentEvents, setRecentEvents] = useState<RawEvent[]>([]);
-  const [scanning, setScanning]       = useState(false);
-
-  // Sessions
-  const [sessionCount, setSessionCount]           = useState<number | null>(null);
-  const [sessions, setSessions]                   = useState<Session[]>([]);
+  // Pipeline data
+  const [eventCount, setEventCount]             = useState<number | null>(null);
+  const [recentEvents, setRecentEvents]         = useState<RawEvent[]>([]);
+  const [scanning, setScanning]                 = useState(false);
+  const [sessionCount, setSessionCount]         = useState<number | null>(null);
+  const [sessions, setSessions]                 = useState<Session[]>([]);
   const [filteredEventCount, setFilteredEventCount] = useState<number | null>(null);
-  const [buildingSessions, setBuildingSessions]   = useState(false);
+  const [buildingSessions, setBuildingSessions] = useState(false);
+  const [threadCount, setThreadCount]           = useState<number | null>(null);
+  const [threads, setThreads]                   = useState<IntentThread[]>([]);
+  const [buildingThreads, setBuildingThreads]   = useState(false);
 
-  // Threads
-  const [threadCount, setThreadCount] = useState<number | null>(null);
-  const [threads, setThreads]         = useState<IntentThread[]>([]);
-  const [buildingThreads, setBuildingThreads] = useState(false);
-
-  // AI labeling (Phase 6)
+  // AI labeling
   const [apiKey, setApiKeyState]   = useState("");
   const [keySaved, setKeySaved]    = useState(false);
   const [labeling, setLabeling]    = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
+
+  // UI state
+  const [visibleStatuses, setVisibleStatuses] = useState<Set<IntentThread["status"]>>(
+    new Set(ALL_STATUSES)
+  );
+  const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [eventsOpen, setEventsOpen]     = useState(false);
 
   useEffect(() => {
     void refreshAll();
@@ -229,25 +243,13 @@ export default function App() {
       setFilteredEventCount(allSessions.reduce((n, s) => n + s.events.length, 0));
     }
     setThreadCount(tc);
-    setThreads(sortedThreads(allThreads));
-  }
-
-  function sortedThreads(raw: IntentThread[]): IntentThread[] {
-    const order = { active: 0, stalled: 1, dormant: 2 };
-    return [...raw].sort((a, b) => {
-      const byStatus = order[a.status] - order[b.status];
-      return byStatus !== 0 ? byStatus : b.confidence - a.confidence;
-    });
+    setThreads(allThreads);
   }
 
   async function handleScan() {
     setScanning(true);
-    try {
-      await backfillHistory(14);
-      await refreshAll();
-    } finally {
-      setScanning(false);
-    }
+    try { await backfillHistory(14); await refreshAll(); }
+    finally { setScanning(false); }
   }
 
   async function handleBuildSessions() {
@@ -258,9 +260,7 @@ export default function App() {
       const allSessions = await getAllSessions();
       setSessionCount(allSessions.length);
       setSessions([...allSessions].reverse());
-    } finally {
-      setBuildingSessions(false);
-    }
+    } finally { setBuildingSessions(false); }
   }
 
   async function handleBuildThreads() {
@@ -268,11 +268,8 @@ export default function App() {
     try {
       const result = await buildThreads();
       setThreadCount(result.threads);
-      const allThreads = await getAllThreads();
-      setThreads(sortedThreads(allThreads));
-    } finally {
-      setBuildingThreads(false);
-    }
+      setThreads(await getAllThreads());
+    } finally { setBuildingThreads(false); }
   }
 
   async function handleSaveKey() {
@@ -286,133 +283,232 @@ export default function App() {
     setLabelError(null);
     try {
       await labelThreads(apiKey.trim());
-      const allThreads = await getAllThreads();
-      setThreads(sortedThreads(allThreads));
+      setThreads(await getAllThreads());
     } catch (err) {
       setLabelError(err instanceof Error ? err.message : "Labeling failed.");
-    } finally {
-      setLabeling(false);
-    }
+    } finally { setLabeling(false); }
   }
 
+  function toggleStatus(s: IntentThread["status"]) {
+    setVisibleStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s); else next.add(s);
+      return next;
+    });
+  }
+
+  // Group threads by status, sorted by confidence desc within each group
+  const statusGroups = ALL_STATUSES.map((s) => ({
+    status: s,
+    items: threads
+      .filter((t) => t.status === s)
+      .sort((a, b) => b.confidence - a.confidence),
+  }));
+
+  const statusCounts = Object.fromEntries(
+    statusGroups.map(({ status, items }) => [status, items.length])
+  ) as Record<IntentThread["status"], number>;
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
-    <main className="app">
-      <header className="app-header">
-        <h1 className="app-title">openloops</h1>
-        <p className="app-subtitle">the decisions you started and never closed</p>
-      </header>
+    <div className="app-shell">
 
-      {/* ── Intent map (above sessions) ── */}
-      <section className="pipeline-section">
-        <div className="pipeline-header">
-          <div>
-            <h2 className="section-heading" style={{ marginBottom: 4 }}>Intent Map</h2>
-            {threadCount !== null && threadCount > 0 && (
-              <p className="pipeline-summary">{threadCount} thread{threadCount !== 1 ? "s" : ""} detected</p>
-            )}
-          </div>
-          <button
-            className="action-btn"
-            onClick={handleBuildThreads}
-            disabled={buildingThreads || !sessionCount}
-          >
-            {buildingThreads ? "Building…" : "Build intent map"}
+      {/* ── Left rail ── */}
+      <aside className="rail">
+        <div className="rail-wordmark">openloops</div>
+
+        {/* Pipeline actions */}
+        <div className="rail-section">
+          <div className="rail-eyebrow">Pipeline</div>
+
+          <button className="rail-action" onClick={handleScan} disabled={scanning}>
+            <span className="rail-action-label">
+              {scanning ? "Scanning…" : "Scan my history"}
+            </span>
+            <span className="rail-action-count">
+              {eventCount !== null && eventCount > 0
+                ? `${eventCount.toLocaleString()} events` : "—"}
+            </span>
           </button>
-        </div>
 
-        {/* ── AI labeling (opt-in) ── */}
-        <div className="api-key-row">
-          <input
-            className="api-key-input"
-            type="password"
-            placeholder="Anthropic API key (sk-ant-…)"
-            value={apiKey}
-            onChange={(e) => { setApiKeyState(e.target.value); setKeySaved(false); }}
-          />
           <button
-            className="action-btn"
-            onClick={handleSaveKey}
-            disabled={!apiKey.trim() || keySaved}
-          >
-            {keySaved ? "Saved" : "Save key"}
-          </button>
-          <button
-            className="action-btn"
-            onClick={handleLabel}
-            disabled={labeling || !keySaved || threads.length === 0}
-          >
-            {labeling ? "Labeling…" : "Label with AI"}
-          </button>
-        </div>
-        {labelError && <p className="label-error">{labelError}</p>}
-
-        {threads.length > 0 && (
-          <ul className="thread-list">
-            {threads.map((t) => <ThreadCard key={t.id} thread={t} />)}
-          </ul>
-        )}
-      </section>
-
-      {/* ── Sessions ── */}
-      <section className="pipeline-section">
-        <div className="pipeline-header">
-          <div>
-            <h2 className="section-heading" style={{ marginBottom: 4 }}>Sessions</h2>
-            {filteredEventCount !== null && sessionCount !== null && sessionCount > 0 && (
-              <p className="pipeline-summary">
-                {filteredEventCount.toLocaleString()} events → {sessionCount.toLocaleString()} sessions
-              </p>
-            )}
-          </div>
-          <button
-            className="action-btn"
+            className="rail-action"
             onClick={handleBuildSessions}
             disabled={buildingSessions || !eventCount}
           >
-            {buildingSessions ? "Building…" : "Build sessions"}
+            <span className="rail-action-label">
+              {buildingSessions ? "Building…" : "Build sessions"}
+            </span>
+            <span className="rail-action-count">
+              {sessionCount !== null && sessionCount > 0
+                ? `${sessionCount.toLocaleString()} sessions` : "—"}
+            </span>
+          </button>
+
+          <button
+            className="rail-action"
+            onClick={handleBuildThreads}
+            disabled={buildingThreads || !sessionCount}
+          >
+            <span className="rail-action-label">
+              {buildingThreads ? "Building…" : "Build intent map"}
+            </span>
+            <span className="rail-action-count">
+              {threadCount !== null && threadCount > 0
+                ? `${threadCount.toLocaleString()} thread${threadCount !== 1 ? "s" : ""}` : "—"}
+            </span>
           </button>
         </div>
 
-        {sessions.length > 0 && (
-          <ul className="session-list">
-            {sessions.map((s) => <SessionRow key={s.id} session={s} />)}
-          </ul>
-        )}
-      </section>
+        {/* AI labeling */}
+        <div className="rail-section">
+          <div className="rail-eyebrow">Intelligence</div>
+          <div className="rail-key-area">
+            <input
+              className="rail-key-input"
+              type="password"
+              placeholder="sk-ant-…"
+              value={apiKey}
+              onChange={(e) => { setApiKeyState(e.target.value); setKeySaved(false); }}
+            />
+            <div className="rail-key-btns">
+              <button
+                className="rail-btn"
+                onClick={handleSaveKey}
+                disabled={!apiKey.trim() || keySaved}
+              >
+                {keySaved ? "Saved ✓" : "Save key"}
+              </button>
+              <button
+                className="rail-btn rail-btn-accent"
+                onClick={handleLabel}
+                disabled={labeling || !keySaved || threads.length === 0}
+              >
+                {labeling ? "Labeling…" : "Label with AI"}
+              </button>
+            </div>
+            {labelError && <p className="label-error">{labelError}</p>}
+          </div>
+        </div>
 
-      {/* ── Raw events ── */}
-      <section className="pipeline-section">
-        <div className="pipeline-header">
-          <div>
-            <h2 className="section-heading" style={{ marginBottom: 4 }}>Raw Events</h2>
-            {eventCount !== null && (
-              <p className="pipeline-summary">
-                {eventCount.toLocaleString()} events captured
-              </p>
+        {/* Status filter */}
+        <div className="rail-section">
+          <div className="rail-eyebrow">Filter</div>
+          {ALL_STATUSES.map((s) => {
+            const on = visibleStatuses.has(s);
+            return (
+              <button
+                key={s}
+                className={`filter-row${on ? "" : " off"}`}
+                onClick={() => toggleStatus(s)}
+              >
+                <span className={`filter-dot ${STATUS_DOT_CLASS[s]}`} />
+                <span className="filter-label">{s}</span>
+                {statusCounts[s] > 0 && (
+                  <span className="filter-count">{statusCounts[s]}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* ── Main column ── */}
+      <main className="main-col">
+        <header className="app-header">
+          <h1 className="app-title">openloops</h1>
+          <p className="app-subtitle">the decisions you started and never closed</p>
+        </header>
+
+        {/* Intent map grouped by status */}
+        <div className="intent-map">
+          {threads.length === 0 ? (
+            <p className="empty-state">
+              Run the pipeline to see your intent threads.
+            </p>
+          ) : (
+            statusGroups.map(({ status, items }) => {
+              if (!visibleStatuses.has(status) || items.length === 0) return null;
+              return (
+                <section key={status} className="status-group">
+                  <div className="status-group-header">
+                    <span className={`status-eyebrow-dot ${STATUS_DOT_CLASS[status]}`} />
+                    <h2 className="status-eyebrow">
+                      {status.toUpperCase()}
+                      <span className="status-eyebrow-count"> · {items.length}</span>
+                    </h2>
+                  </div>
+                  <ul className="thread-list">
+                    {items.map((t) => <ThreadCard key={t.id} thread={t} />)}
+                  </ul>
+                </section>
+              );
+            })
+          )}
+        </div>
+
+        {/* Pipeline detail — collapsible */}
+        <div className="pipeline-detail">
+          <div className="pipeline-detail-eyebrow">Pipeline Detail</div>
+
+          <div className="collapsible-section">
+            <button
+              className="collapsible-header"
+              onClick={() => setSessionsOpen((v) => !v)}
+            >
+              <span className="collapsible-title">
+                Sessions
+                {sessionCount !== null && sessionCount > 0 && (
+                  <span className="collapsible-count"> · {sessionCount.toLocaleString()}</span>
+                )}
+                {filteredEventCount !== null && filteredEventCount > 0 && sessionCount !== null && sessionCount > 0 && (
+                  <span className="collapsible-count"> ({filteredEventCount.toLocaleString()} events)</span>
+                )}
+              </span>
+              <span className="collapsible-chevron">{sessionsOpen ? "▲" : "▼"}</span>
+            </button>
+            {sessionsOpen && sessions.length > 0 && (
+              <ul className="session-list">
+                {sessions.map((s) => <SessionRow key={s.id} session={s} />)}
+              </ul>
             )}
           </div>
-          <button className="action-btn" onClick={handleScan} disabled={scanning}>
-            {scanning ? "Scanning…" : "Scan my history"}
-          </button>
-        </div>
 
-        {recentEvents.length > 0 && (
-          <>
-            <h3 className="subsection-heading">20 most recent</h3>
-            <ul className="event-list">
-              {recentEvents.map((e) => (
-                <li key={e.id} className="event-item">
-                  <span className="event-title">{e.title}</span>
-                  <span className="event-meta">
-                    <span className="event-domain">{e.domain}</span>
-                    <span className="event-time">{relativeTime(e.visitedAt)}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </section>
-    </main>
+          <div className="collapsible-section">
+            <button
+              className="collapsible-header"
+              onClick={() => setEventsOpen((v) => !v)}
+            >
+              <span className="collapsible-title">
+                Raw Events
+                {eventCount !== null && eventCount > 0 && (
+                  <span className="collapsible-count"> · {eventCount.toLocaleString()}</span>
+                )}
+              </span>
+              <span className="collapsible-chevron">{eventsOpen ? "▲" : "▼"}</span>
+            </button>
+            {eventsOpen && recentEvents.length > 0 && (
+              <>
+                <p className="collapsible-note">20 most recent</p>
+                <ul className="event-list">
+                  {recentEvents.map((e) => (
+                    <li key={e.id} className="event-item">
+                      <span className="event-title">{e.title}</span>
+                      <span className="event-meta">
+                        <span className="event-domain">{e.domain}</span>
+                        <span className="event-time">{relativeTime(e.visitedAt)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
