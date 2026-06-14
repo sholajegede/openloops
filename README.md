@@ -25,7 +25,7 @@ openloops is a local-only Chrome extension that turns raw browsing history into 
 
 Not bookmarks. Not a reading list. Threads: an active decision still in progress, a product you were comparing before you got distracted, a question you keep returning to. openloops surfaces those patterns from what you were actually doing, groups them into coherent research arcs, and scores how alive each thread still is.
 
-Everything runs on-device. The only optional network call is AI labeling, which uses your own Anthropic API key and sends only the clustered page titles — never raw URLs or full page content.
+Everything runs on-device. There are two optional enrichment features — brand data via [context.dev](https://context.dev) and AI thread labeling via Claude Haiku — each triggered explicitly with your own API key. Neither sends raw URLs, page content, or browsing history.
 
 ## How it works
 
@@ -79,9 +79,18 @@ Everything runs on-device. The only optional network call is AI labeling, which 
                   │  optional, opt-in
                   ▼
 ┌─────────────────────────────────────────────────┐
+│         BRAND ENRICHMENT (opt-in)                │
+│  context.dev · domain names only                │
+│  → company name · industry · description        │
+│  → logo URL · brand color                       │
+└─────────────────┬───────────────────────────────┘
+                  │  optional, opt-in
+                  ▼
+┌─────────────────────────────────────────────────┐
 │              AI LABELING (opt-in)                │
 │  Claude Haiku 4.5 · your key · one batch call   │
-│  rewrites title + summary + type per thread     │
+│  grounded in enriched company descriptions      │
+│  → rewrites title + summary + type per thread   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -95,15 +104,35 @@ Everything runs on-device. The only optional network call is AI labeling, which 
 | **Ambient detection** | Computes per-domain ubiquity (distinct days seen ÷ total active days). Domains present on ≥ 60 % of active days over ≥ 3 days (Google, YouTube, etc.) are excluded from similarity scoring. | `src/pipeline/ambient.ts` |
 | **Clustering** | Greedy agglomerative pass over chronological sessions. Similarity = 0.5 × domain Jaccard + 0.5 × keyword Jaccard (over non-ambient domains). Sessions above the threshold join the nearest thread; otherwise they start a new one. Prunes threads with 1 session and fewer than 3 events. | `src/pipeline/threads.ts` |
 | **Scoring** | Assigns type via keyword scanning (`BUYING_WORDS`, `LEARNING_WORDS`). Computes confidence from four weighted signals: distinct days (35 %), sessions (25 %), events (20 %), clear type (20 %). Sets status: active < 48 h, stalled < 7 d, dormant otherwise. | `src/pipeline/threads.ts` |
-| **AI labeling** | Optional. Sends compact thread descriptors (keywords, domains, sample titles — no raw URLs) to Claude Haiku 4.5 in one batched call. Overwrites title, type, and adds a one-sentence summary per thread. Requires the user's own Anthropic API key. | `src/pipeline/label.ts` |
+| **Brand enrichment** | Optional. Sends the domain names found in each thread to the context.dev API. Returns structured company records — name, industry, one-sentence description, logo URL, brand color — which are stored on the thread and displayed as domain chips in the UI. Only domain names leave the device; no URLs or page content. | `src/pipeline/enrich.ts` |
+| **AI labeling** | Optional. Sends compact thread descriptors (keywords, domain names, and the enriched company descriptions from the previous step — no raw URLs or page content) to Claude Haiku 4.5 in a single batched call. Overwrites title and type, and adds a one-sentence summary per thread. The enriched descriptions ground the model in what each site actually is rather than what the user searched for on it. Requires the user's own Anthropic API key. | `src/pipeline/label.ts` |
+
+## The intelligence layer
+
+The two optional enrichment steps are designed to work together, and the order matters.
+
+**Brand enrichment (context.dev)** resolves the domain names that appear in each thread into structured company records: a canonical name, an industry category, a one-sentence description of what the company does, a logo URL, and a brand color. This data is stored on the thread object and surfaced in the UI as domain chips — a small monogram square that becomes a real logo in the enriched state, with the brand color as a tint.
+
+The key insight is that domain names alone are weak signals. `stripe.com` and `dashboard.stripe.com/logs` are the same intent; `linear.app` and `linear.app/issues/ABC-123` are the same company. The enriched description — "Linear is a project management tool for software teams" — is a far stronger input to a classifier than the raw keyword tokens extracted from page titles.
+
+**AI labeling (Claude Haiku)** receives the enriched thread descriptors. Each descriptor contains the thread's top keywords, its top domain names, a sample of page titles, and — when enrichment has run — the company descriptions for each domain. The model is asked to assign a short title, a one-sentence summary, and a type (buying / research / learning / planning / unclassified) per thread. With enrichment, it is working from grounded facts about what each site is; without it, it is working purely from page-title keywords.
+
+Neither step is required. The core pipeline — capture, noise filter, sessions, clustering, scoring — runs entirely on-device and produces a working intent map with no network calls. Enrichment and labeling sharpen the output but do not change the underlying data structure.
 
 ## Privacy
 
-**All data lives in IndexedDB on your machine.** There are no servers, no accounts, no analytics, no telemetry of any kind.
+The core pipeline — capture, noise filtering, session segmentation, ambient detection, clustering, and scoring — runs **entirely on-device** in IndexedDB. No data leaves your machine, and there are no servers, accounts, analytics, or telemetry of any kind.
 
-The **only** data that ever leaves your device is the clustered thread descriptors (keywords, domain names, and a sample of page titles) sent to the Anthropic API when you explicitly click "Label with AI" with your own API key. Even then, raw URLs and full page content are never sent.
+There are exactly **two optional, opt-in network calls**, both triggered manually by you:
 
-Your Anthropic API key is stored in `chrome.storage.local` — on-device, never in the repository, never transmitted anywhere other than to `api.anthropic.com` during labeling.
+| What leaves your device | When | Where it goes |
+|---|---|---|
+| Domain names only (e.g. `stripe.com`, `notion.so`) | When you click "Enrich" with a context.dev key | `api.context.dev` |
+| Thread keywords, domain names, and a sample of page titles | When you click "Label with AI" with an Anthropic key | `api.anthropic.com` |
+
+Neither call ever sends raw URLs, full page content, browsing timestamps, or anything that could identify a specific page visit. Both are skipped entirely if you do not add a key.
+
+Both API keys are stored in `chrome.storage.local` — on-device, never in the repository, and never transmitted anywhere other than the respective API endpoint during the operation they enable.
 
 ## The dashboard
 
@@ -189,7 +218,18 @@ Then in Chrome:
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked** and select the `dist/` folder
 
-There is **no `.env` file** and no environment variables. The optional Anthropic API key is pasted directly into the dashboard at runtime — it is stored in `chrome.storage.local` on your device and never touches the repository.
+There is **no `.env` file** and no environment variables to set. API keys are pasted directly into the dashboard at runtime and stored in `chrome.storage.local` on your device — they never touch the repository.
+
+### Two keys (optional)
+
+Both enrichment features require their own key. Both are optional; the app is fully functional without either.
+
+| Feature | Key source | Where to paste it | Free tier |
+|---|---|---|---|
+| AI thread labeling | [console.anthropic.com](https://console.anthropic.com) — create an API key | **INTELLIGENCE** panel in the left rail → "sk-ant-…" input | Yes (usage-based, starts free) |
+| Brand enrichment | [context.dev](https://context.dev) — sign up for an API key | **INTELLIGENCE** panel in the left rail → context.dev key input | Yes |
+
+Paste a key, click **Save key**, then click the corresponding action button. Keys are persisted across sessions in `chrome.storage.local` — you only need to paste them once.
 
 ## Usage
 
@@ -207,7 +247,8 @@ Run steps 2–4 again any time to rebuild from scratch with the latest browsing 
 - **[Vite](https://vitejs.dev/) + [@crxjs/vite-plugin](https://crxjs.dev/vite-plugin)** — build and HMR for Manifest V3 extensions
 - **[React 18](https://react.dev/)** — dashboard UI (full Chrome tab via `options_page`)
 - **[idb](https://github.com/jakearchibald/idb)** — typed IndexedDB wrapper
-- **[Claude Haiku 4.5](https://www.anthropic.com/)** — optional AI thread labeling (bring your own key)
+- **[context.dev](https://context.dev)** — optional brand intelligence / enrichment layer: resolves domain names into company records (name, industry, description, logo, brand color)
+- **[Claude Haiku 4.5](https://www.anthropic.com/)** — optional AI thread labeling, grounded by enriched company descriptions (bring your own key)
 - Chrome Extension **Manifest V3** — service worker, `history`/`tabs`/`storage` permissions
 
 ## Screenshot

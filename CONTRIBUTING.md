@@ -49,6 +49,15 @@ intent_threads (IndexedDB)
 
 Each stage is a separate module and a separate IndexedDB object store. Stages are independently inspectable and independently re-runnable. See [CLAUDE.md](./CLAUDE.md) for detailed notes on every phase, including all tunable constants and the rationale behind each design decision.
 
+## Optional API keys
+
+openloops has two optional enrichment features, each requiring its own API key:
+
+- **context.dev** — brand enrichment: resolves domain names into company records (logo, brand color, industry, description). Results are cached in the thread object in IndexedDB, so subsequent runs do not re-fetch the same domains. Calls are batched and rate-limited in `src/pipeline/enrich.ts`.
+- **Anthropic (Claude Haiku 4.5)** — AI labeling: one batched call per "Label with AI" click, sending keywords, domains, and enriched descriptions. No streaming; the call returns a JSON array covering all threads.
+
+**Core contributions do not require either key.** The pipeline (capture → sessions → clustering → scoring) runs entirely on-device. You can develop and test everything through "Build intent map" without any API credentials. If your change touches `enrich.ts` or `label.ts`, you'll need the relevant key to run it end-to-end; otherwise you're clear.
+
 ## Coding conventions
 
 - **TypeScript everywhere.** No `any`, no type assertions without a clear comment explaining why.
