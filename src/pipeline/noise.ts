@@ -34,7 +34,7 @@ export const BLOCKED_DOMAINS: readonly string[] = [
 /**
  * Adult content domains dropped before sessionization.
  * Real products need a proper content-category filtering layer; this list keeps
- * a published demo and tutorial clean without building that full layer.
+ * the project's content clean without building that full layer.
  * Kept as its own constant so it is easy to extend or remove entirely.
  */
 export const ADULT_DOMAINS: readonly string[] = [

@@ -5,7 +5,7 @@
  * That's a simplification — "bbc.co.uk" and "news.bbc.co.uk" would not
  * be collapsed correctly. True registrable-domain extraction requires the
  * Public Suffix List (https://publicsuffix.org/). Deferred as a future
- * improvement; acceptable for a tutorial MVP.
+ * improvement; deferred as a deliberate simplification.
  */
 /** True only for http:// and https:// URLs — the shared scheme guard used by
  *  both live capture (background.ts) and backfill so the definition never drifts. */

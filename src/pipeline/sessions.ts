@@ -12,7 +12,7 @@
  *   B  t= 5 min  "TypeScript Handbook"                    typescriptlang.org
  *   C  t=10 min  "microsoft/TypeScript - GitHub"          github.com
  *      ↑ gap to D = 45 min  >  SESSION_GAP_MS (30 min)  → SPLIT HERE
- *   D  t=55 min  "React hooks tutorial - YouTube"         youtube.com
+ *   D  t=55 min  "React hooks explained - YouTube"         youtube.com
  *   E  t=60 min  "useEffect cleanup - Stack Overflow"     stackoverflow.com
  *
  * Output sessions:

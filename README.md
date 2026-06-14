@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sholajegede/openloops/main/public/openloops-logo.svg" alt="openloops logo" width="72" height="72" />
+  <img src="https://raw.githubusercontent.com/sholajegede/openloops/main/public/openloops-logo.png" alt="openloops logo" width="72" height="72" />
 </p>
 
 <h1 align="center">openloops</h1>
@@ -19,8 +19,6 @@
   <img src="https://img.shields.io/badge/100%25%20local-no%20servers-22c55e?style=flat-square" alt="100% local" />
 </p>
 
----
-
 ## What this is
 
 openloops is a local-only Chrome extension that turns raw browsing history into **intent threads** — the open loops you never closed.
@@ -28,8 +26,6 @@ openloops is a local-only Chrome extension that turns raw browsing history into 
 Not bookmarks. Not a reading list. Threads: an active decision still in progress, a product you were comparing before you got distracted, a question you keep returning to. openloops surfaces those patterns from what you were actually doing, groups them into coherent research arcs, and scores how alive each thread still is.
 
 Everything runs on-device. The only optional network call is AI labeling, which uses your own Anthropic API key and sends only the clustered page titles — never raw URLs or full page content.
-
----
 
 ## How it works
 
@@ -89,8 +85,6 @@ Everything runs on-device. The only optional network call is AI labeling, which 
 └─────────────────────────────────────────────────┘
 ```
 
----
-
 ## The pipeline, stage by stage
 
 | Stage | What it does | Where in code |
@@ -103,8 +97,6 @@ Everything runs on-device. The only optional network call is AI labeling, which 
 | **Scoring** | Assigns type via keyword scanning (`BUYING_WORDS`, `LEARNING_WORDS`). Computes confidence from four weighted signals: distinct days (35 %), sessions (25 %), events (20 %), clear type (20 %). Sets status: active < 48 h, stalled < 7 d, dormant otherwise. | `src/pipeline/threads.ts` |
 | **AI labeling** | Optional. Sends compact thread descriptors (keywords, domains, sample titles — no raw URLs) to Claude Haiku 4.5 in one batched call. Overwrites title, type, and adds a one-sentence summary per thread. Requires the user's own Anthropic API key. | `src/pipeline/label.ts` |
 
----
-
 ## Privacy
 
 **All data lives in IndexedDB on your machine.** There are no servers, no accounts, no analytics, no telemetry of any kind.
@@ -112,8 +104,6 @@ Everything runs on-device. The only optional network call is AI labeling, which 
 The **only** data that ever leaves your device is the clustered thread descriptors (keywords, domain names, and a sample of page titles) sent to the Anthropic API when you explicitly click "Label with AI" with your own API key. Even then, raw URLs and full page content are never sent.
 
 Your Anthropic API key is stored in `chrome.storage.local` — on-device, never in the repository, never transmitted anywhere other than to `api.anthropic.com` during labeling.
-
----
 
 ## The dashboard
 
@@ -134,8 +124,6 @@ The dashboard is a full Chrome tab (not a popup) with three sections:
 
 Below the Intent Map header: a password input for your Anthropic API key, a **Save key** button, and a **Label with AI** button.
 
----
-
 ## Tuning
 
 All tunables are named constants — change the value, rebuild, and re-run the pipeline from the dashboard.
@@ -149,8 +137,6 @@ All tunables are named constants — change the value, rebuild, and re-run the p
 | `BLOCKED_DOMAINS` | (list) | `src/pipeline/noise.ts` | Comms/utility domains dropped before sessionization. Add domains freely. |
 | `ADULT_DOMAINS` / `JUNK_DOMAINS` | (lists) | `src/pipeline/noise.ts` | Separate lists merged at runtime; either is independently removable. |
 | `PLATFORM_STOPWORDS` | (list) | `src/pipeline/keywords.ts` | Social-platform brand and UI tokens excluded from keyword extraction. |
-
----
 
 ## Project structure
 
@@ -187,8 +173,6 @@ openloops/
 └── LICENSE
 ```
 
----
-
 ## Setup
 
 **Prerequisites:** Node 18+, Chrome (or any Chromium-based browser).
@@ -207,8 +191,6 @@ Then in Chrome:
 
 There is **no `.env` file** and no environment variables. The optional Anthropic API key is pasted directly into the dashboard at runtime — it is stored in `chrome.storage.local` on your device and never touches the repository.
 
----
-
 ## Usage
 
 1. Click the openloops toolbar icon (or navigate to the extension's options page) to open the dashboard.
@@ -219,8 +201,6 @@ There is **no `.env` file** and no environment variables. The optional Anthropic
 
 Run steps 2–4 again any time to rebuild from scratch with the latest browsing data.
 
----
-
 ## Tech
 
 - **[TypeScript](https://www.typescriptlang.org/)** — strict types throughout
@@ -230,12 +210,8 @@ Run steps 2–4 again any time to rebuild from scratch with the latest browsing 
 - **[Claude Haiku 4.5](https://www.anthropic.com/)** — optional AI thread labeling (bring your own key)
 - Chrome Extension **Manifest V3** — service worker, `history`/`tabs`/`storage` permissions
 
----
-
 ## Screenshot
 
 > *Drop a screenshot or GIF of the dashboard here once it's ready.*
 
----
-
-Built as a freeCodeCamp tutorial. MIT License — see [LICENSE](./LICENSE).
+MIT License — see [LICENSE](./LICENSE).

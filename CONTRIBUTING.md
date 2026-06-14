@@ -2,8 +2,6 @@
 
 openloops is a local-first Chrome extension: no servers, no accounts, no telemetry. Please keep it that way. Any change that introduces a network call, a remote dependency for core functionality, or data collection outside of the explicit opt-in AI labeling feature will not be merged.
 
----
-
 ## Dev setup
 
 **Prerequisites:** Node 18+, Chrome (or Chromium-based browser).
@@ -25,8 +23,6 @@ After making changes, the extension reloads automatically in dev mode. To test t
 3. **Build intent map** — clusters and scores
 
 Use **Chrome DevTools → Application → IndexedDB → openloops** to inspect the three stores (`raw_events`, `sessions`, `intent_threads`) directly.
-
----
 
 ## Architecture
 
@@ -53,18 +49,14 @@ intent_threads (IndexedDB)
 
 Each stage is a separate module and a separate IndexedDB object store. Stages are independently inspectable and independently re-runnable. See [CLAUDE.md](./CLAUDE.md) for detailed notes on every phase, including all tunable constants and the rationale behind each design decision.
 
----
-
 ## Coding conventions
 
 - **TypeScript everywhere.** No `any`, no type assertions without a clear comment explaining why.
 - **One pipeline stage per file** under `src/pipeline/`. Do not mix concerns across stages.
-- **Readable over clever.** This project doubles as a tutorial. Prefer clear variable names and a short inline comment when the _why_ is non-obvious over clever one-liners that require a second read.
+- **Readable over clever.** Prefer clear variable names and a short inline comment when the _why_ is non-obvious over clever one-liners that require a second read.
 - **Tunables as named constants.** `SESSION_GAP_MS`, `SIMILARITY_THRESHOLD`, `UBIQUITY_THRESHOLD`, blocklists, stopword lists — all are named exports at the top of their module. Never magic numbers inline.
 - **No premature abstraction.** Don't build helper utilities for hypothetical future use. Three similar lines is better than a premature abstraction.
 - **No new npm dependencies** for core pipeline logic. The pipeline uses only the Chrome extension APIs, `idb`, and standard TypeScript. Lightweight additions for the dashboard (React already present) can be considered case-by-case.
-
----
 
 ## Tuning and extending the blocklists
 
@@ -80,8 +72,6 @@ The easiest contribution is extending the filter lists — they are plain arrays
 
 **Tuning clustering:** Lower `SIMILARITY_THRESHOLD` in `src/pipeline/threads.ts` to merge sessions more aggressively (fewer, broader threads). Raise it to fragment more (more, narrower threads). The default is `0.15`. After changing it, rebuild and re-run "Build intent map" — use `console.table` in DevTools on the thread output to inspect before/after.
 
----
-
 ## Pull requests
 
 1. Branch off `main`: `git checkout -b my-change`.
@@ -91,8 +81,6 @@ The easiest contribution is extending the filter lists — they are plain arrays
 5. Open the PR against `main` on [github.com/sholajegede/openloops](https://github.com/sholajegede/openloops).
 
 For larger changes (new pipeline stages, significant refactors), open an issue first to align on approach before writing code.
-
----
 
 ## Bug reports and ideas
 
