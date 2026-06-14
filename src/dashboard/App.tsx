@@ -781,8 +781,17 @@ export default function App() {
                 {contextKeySaved ? "Saved ✓" : "Save key"}
               </button>
             </div>
+            <a
+              className="rail-key-link"
+              href="https://www.context.dev/login"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Get a context.dev API key →
+            </a>
             <p className="rail-key-note">
               Enrichment sends domain names (not URLs or history) to context.dev.
+              Optional — improves AI labeling with brand context.
             </p>
 
             {/* Anthropic key */}
@@ -811,6 +820,14 @@ export default function App() {
                 {enriching ? "Enriching…" : labeling ? "Labeling…" : "Label & enrich"}
               </button>
             </div>
+            <a
+              className="rail-key-link"
+              href="https://console.anthropic.com/settings/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Get an Anthropic API key →
+            </a>
             {enrichError && <p className="enrich-error">{enrichError}</p>}
             {labelError  && <p className="label-error">{labelError}</p>}
           </div>

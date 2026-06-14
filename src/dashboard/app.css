@@ -825,6 +825,18 @@ button { cursor: pointer; }
   padding: 0 2px;
 }
 
+.rail-key-link {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-3);
+  text-decoration: none;
+  padding: 0 2px;
+}
+
+.rail-key-link:hover {
+  color: var(--accent);
+}
+
 /* ── Main column footer ── */
 
 .main-footer {
@@ -856,7 +868,7 @@ button { cursor: pointer; }
    ══════════════════════════════════════════ */
 
 .overview-panel {
-  width: 380px;
+  width: 440px;
   flex-shrink: 0;
   position: sticky;
   top: 0;
@@ -871,7 +883,7 @@ button { cursor: pointer; }
 }
 
 /* Hide right panel on narrower viewports so it doesn't crowd. */
-@media (max-width: 1099px) {
+@media (max-width: 1179px) {
   .overview-panel { display: none; }
 }
 
@@ -1274,6 +1286,44 @@ button { cursor: pointer; }
 
 .assistant-message-assistant a:hover {
   text-decoration: underline;
+}
+
+.assistant-message-assistant h1,
+.assistant-message-assistant h2,
+.assistant-message-assistant h3 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text);
+  margin: 0.6em 0 0.3em;
+}
+
+.assistant-message-assistant h1 { font-size: 0.95rem; }
+.assistant-message-assistant h2 { font-size: 0.9rem; }
+.assistant-message-assistant h3 { font-size: 0.85rem; }
+
+.assistant-message-assistant h4,
+.assistant-message-assistant h5,
+.assistant-message-assistant h6 {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0.6em 0 0.3em;
+}
+
+.assistant-message-assistant h1:first-child,
+.assistant-message-assistant h2:first-child,
+.assistant-message-assistant h3:first-child,
+.assistant-message-assistant h4:first-child,
+.assistant-message-assistant h5:first-child,
+.assistant-message-assistant h6:first-child {
+  margin-top: 0;
+}
+
+.assistant-message-assistant hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.6em 0;
 }
 
 .assistant-thinking {
