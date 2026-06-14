@@ -16,6 +16,9 @@ import {
 } from "../db/index";
 import type { RawEvent, Session, IntentThread, Brand } from "../types";
 
+// chrome.runtime.getURL resolves the public/ asset to its extension-package URL.
+const logoUrl = chrome.runtime.getURL("openloops-logo.png");
+
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
@@ -36,6 +39,9 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
 });
 const timeFmt = new Intl.DateTimeFormat(undefined, {
   hour: "numeric", minute: "2-digit",
+});
+const shortDateFmt = new Intl.DateTimeFormat(undefined, {
+  month: "short", day: "numeric",
 });
 
 function formatSessionTime(startedAt: number, endedAt: number): string {
@@ -63,12 +69,11 @@ interface DomainChipProps {
   brandColor?: string;
 }
 
-function DomainChip({ domain, logoUrl, brandColor }: DomainChipProps) {
+function DomainChip({ domain, logoUrl: chipLogoUrl, brandColor }: DomainChipProps) {
   const [logoFailed, setLogoFailed] = useState(false);
-  const showLogo = !!logoUrl && !logoFailed;
+  const showLogo = !!chipLogoUrl && !logoFailed;
 
   const iconStyle = brandColor ? { background: brandColor + "1a" } : undefined;
-  // Subtle inset-left accent — doesn't affect layout, keeps it restrained.
   const chipStyle: React.CSSProperties | undefined = brandColor
     ? { boxShadow: `inset 2px 0 0 ${brandColor}88` }
     : undefined;
@@ -78,7 +83,7 @@ function DomainChip({ domain, logoUrl, brandColor }: DomainChipProps) {
       <span className="domain-chip-icon" style={iconStyle}>
         {showLogo ? (
           <img
-            src={logoUrl}
+            src={chipLogoUrl}
             alt=""
             className="domain-chip-logo"
             onError={() => setLogoFailed(true)}
@@ -197,6 +202,131 @@ function SessionRow({ session }: { session: Session }) {
         </div>
       )}
     </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Overview panel (right column)
+// ---------------------------------------------------------------------------
+
+interface OverviewPanelProps {
+  eventCount: number | null;
+  sessionCount: number | null;
+  threads: IntentThread[];
+}
+
+function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps) {
+  const totalThreads = threads.length;
+
+  // Status distribution
+  const statusCounts = {
+    active:  threads.filter((t) => t.status === "active").length,
+    stalled: threads.filter((t) => t.status === "stalled").length,
+    dormant: threads.filter((t) => t.status === "dormant").length,
+  };
+
+  // Top 5 domains by event count
+  const domainMap = new Map<string, { events: number; threads: number }>();
+  for (const thread of threads) {
+    const threadDomains = new Set<string>();
+    for (const session of thread.sessions) {
+      for (const domain of session.domains) threadDomains.add(domain);
+      for (const event of session.events) {
+        const entry = domainMap.get(event.domain) ?? { events: 0, threads: 0 };
+        entry.events += 1;
+        domainMap.set(event.domain, entry);
+      }
+    }
+    for (const domain of threadDomains) {
+      const entry = domainMap.get(domain) ?? { events: 0, threads: 0 };
+      entry.threads += 1;
+      domainMap.set(domain, entry);
+    }
+  }
+  const topDomains = [...domainMap.entries()]
+    .sort((a, b) => b[1].events - a[1].events)
+    .slice(0, 5);
+
+  // Date range from thread firstSeen / lastSeen timestamps
+  const allTimestamps = threads.flatMap((t) => [t.firstSeen, t.lastSeen]);
+  const dateStart = allTimestamps.length > 0 ? Math.min(...allTimestamps) : null;
+  const dateEnd   = allTimestamps.length > 0 ? Math.max(...allTimestamps) : null;
+
+  const barWidth = (count: number) =>
+    totalThreads > 0 ? `${Math.round((count / totalThreads) * 100)}%` : "0%";
+
+  return (
+    <aside className="overview-panel">
+      <div className="overview-eyebrow">Overview</div>
+
+      {/* Totals */}
+      <div className="overview-section">
+        <div className="overview-stat">
+          <span className="overview-stat-value">
+            {eventCount !== null && eventCount > 0 ? eventCount.toLocaleString() : "—"}
+          </span>
+          <span className="overview-stat-label">events</span>
+        </div>
+        <div className="overview-stat">
+          <span className="overview-stat-value">
+            {sessionCount !== null && sessionCount > 0 ? sessionCount.toLocaleString() : "—"}
+          </span>
+          <span className="overview-stat-label">sessions</span>
+        </div>
+        <div className="overview-stat">
+          <span className="overview-stat-value">
+            {totalThreads > 0 ? totalThreads.toLocaleString() : "—"}
+          </span>
+          <span className="overview-stat-label">threads</span>
+        </div>
+      </div>
+
+      {/* Status distribution */}
+      {totalThreads > 0 && (
+        <div className="overview-section">
+          <div className="overview-section-label">Status</div>
+          {(["active", "stalled", "dormant"] as const).map((s) => (
+            <div key={s} className="overview-status-row">
+              <span className="overview-status-name">{s.toUpperCase()}</span>
+              <div className="overview-status-track">
+                <div
+                  className={`overview-status-fill overview-status-fill-${s}`}
+                  style={{ width: barWidth(statusCounts[s]) }}
+                />
+              </div>
+              <span className="overview-status-count">{statusCounts[s]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Top domains */}
+      {topDomains.length > 0 && (
+        <div className="overview-section">
+          <div className="overview-section-label">Top Domains</div>
+          {topDomains.map(([domain, stats]) => (
+            <div key={domain} className="overview-domain-row">
+              <span className="overview-domain-name">{domain}</span>
+              <span className="overview-domain-stats">
+                {stats.events}ev · {stats.threads}th
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Date range */}
+      {dateStart !== null && dateEnd !== null && (
+        <div className="overview-section">
+          <div className="overview-section-label">Date Range</div>
+          <div className="overview-date-range">
+            {shortDateFmt.format(dateStart)}
+            <span className="overview-date-sep"> → </span>
+            {shortDateFmt.format(dateEnd)}
+          </div>
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -329,11 +459,9 @@ export default function App() {
           threads.flatMap((t) => t.sessions.flatMap((s) => s.domains))
         )];
         await enrichDomains(contextKey.trim(), allDomains);
-        // Reload brand cache into state so chips update immediately.
         const all = await getAllBrands();
         setBrands(new Map(all.map((b) => [b.domain, b])));
       } catch (err) {
-        // Enrichment failure is non-fatal — log and proceed to labeling.
         console.warn("[openloops] enrichment failed:", err);
       } finally {
         setEnriching(false);
@@ -381,7 +509,10 @@ export default function App() {
 
       {/* ── Left rail ── */}
       <aside className="rail">
-        <div className="rail-wordmark">openloops</div>
+        <div className="rail-wordmark">
+          <img src={logoUrl} alt="" className="rail-logo" />
+          <span>openloops</span>
+        </div>
 
         {/* Pipeline actions */}
         <div className="rail-section">
@@ -412,7 +543,7 @@ export default function App() {
           </button>
 
           <button
-            className="rail-action"
+            className="rail-action rail-action-accent"
             onClick={handleBuildThreads}
             disabled={buildingThreads || !sessionCount}
           >
@@ -505,8 +636,11 @@ export default function App() {
       {/* ── Main column ── */}
       <main className="main-col">
         <header className="app-header">
-          <h1 className="app-title">openloops</h1>
-          <p className="app-subtitle">the decisions you started and never closed</p>
+          <img src={logoUrl} alt="openloops" className="header-logo" />
+          <div>
+            <h1 className="app-title">openloops</h1>
+            <p className="app-subtitle">the decisions you started and never closed</p>
+          </div>
         </header>
 
         {/* Intent map grouped by status */}
@@ -597,18 +731,25 @@ export default function App() {
 
         <footer className="main-footer">
           <span className="brand-credit">
-            brand data by{" "}
+            built with ❤️ by{" "}
             <a
-              href="https://context.dev"
+              href="https://www.linkedin.com/in/sholajegede"
               target="_blank"
               rel="noopener noreferrer"
               className="brand-credit-link"
             >
-              context.dev
+              sholajegede
             </a>
           </span>
         </footer>
       </main>
+
+      {/* ── Right overview panel ── */}
+      <OverviewPanel
+        eventCount={eventCount}
+        sessionCount={sessionCount}
+        threads={threads}
+      />
     </div>
   );
 }
