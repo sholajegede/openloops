@@ -104,6 +104,22 @@ export async function getEventCount(): Promise<number> {
   return db.count("raw_events");
 }
 
+/**
+ * True if raw_events contains at least one event captured by a full history
+ * backfill (source === "backfill"), as opposed to only live-captured events.
+ * Used to gate the "Scan my history" onboarding step — live capture alone
+ * shouldn't mark scanning as done.
+ */
+export async function hasBackfillEvents(): Promise<boolean> {
+  const db = await getDB();
+  let cursor = await db.transaction("raw_events", "readonly").store.openCursor();
+  while (cursor) {
+    if (cursor.value.source === "backfill") return true;
+    cursor = await cursor.continue();
+  }
+  return false;
+}
+
 /** Up to `limit` events sorted by visitedAt descending (most recent first). */
 export async function getRecentEvents(limit: number): Promise<RawEvent[]> {
   const db = await getDB();

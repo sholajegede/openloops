@@ -14,6 +14,7 @@ import {
   getAllThreads,
   getThreadCount,
   getAllBrands,
+  hasBackfillEvents,
 } from "../db/index";
 import type { RawEvent, Session, IntentThread, Brand } from "../types";
 
@@ -436,6 +437,7 @@ type PipelineState = "disabled" | "next" | "done";
  * (normal styling, re-runnable) once its output exists.
  */
 function pipelineStates(
+  hasScanned: boolean,
   eventCount: number | null,
   sessionCount: number | null,
   threadCount: number | null,
@@ -444,9 +446,9 @@ function pipelineStates(
   const hasSessions = (sessionCount ?? 0) > 0;
   const hasThreads  = (threadCount  ?? 0) > 0;
 
-  if (!hasEvents)   return { scan: "next",   sessions: "disabled", threads: "disabled" };
-  if (!hasSessions) return { scan: "done",   sessions: "next",     threads: "disabled" };
-  if (!hasThreads)  return { scan: "done",   sessions: "done",     threads: "next" };
+  if (!hasScanned)  return { scan: "next", sessions: "disabled", threads: "disabled" };
+  if (!hasSessions) return { scan: "done", sessions: hasEvents ? "next" : "disabled", threads: "disabled" };
+  if (!hasThreads)  return { scan: "done", sessions: "done", threads: "next" };
   return { scan: "done", sessions: "done", threads: "done" };
 }
 
@@ -508,6 +510,7 @@ export default function App() {
   const [threadCount, setThreadCount]           = useState<number | null>(null);
   const [threads, setThreads]                   = useState<IntentThread[]>([]);
   const [buildingThreads, setBuildingThreads]   = useState(false);
+  const [hasScanned, setHasScanned]             = useState(false);
 
   // Brand enrichment
   const [contextKey, setContextKeyState]       = useState("");
@@ -544,13 +547,14 @@ export default function App() {
   }, []);
 
   async function refreshAll() {
-    const [ec, recent, sc, allSessions, tc, allThreads] = await Promise.all([
+    const [ec, recent, sc, allSessions, tc, allThreads, scanned] = await Promise.all([
       getEventCount(),
       getRecentEvents(20),
       getSessionCount(),
       getAllSessions(),
       getThreadCount(),
       getAllThreads(),
+      hasBackfillEvents(),
     ]);
     setEventCount(ec);
     setRecentEvents(recent);
@@ -561,6 +565,7 @@ export default function App() {
     }
     setThreadCount(tc);
     setThreads(allThreads);
+    setHasScanned(scanned);
   }
 
   async function handleScan() {
@@ -666,7 +671,7 @@ export default function App() {
   const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
 
   const { scan: scanState, sessions: sessionsState, threads: threadsState } =
-    pipelineStates(eventCount, sessionCount, threadCount);
+    pipelineStates(hasScanned, eventCount, sessionCount, threadCount);
 
   // The welcome screen's single CTA mirrors whichever rail action is NEXT.
   let welcomeStep: 1 | 2 | 3 = 1;
@@ -718,8 +723,7 @@ export default function App() {
               {scanning ? "Scanning…" : "Scan my history"}
             </span>
             <span className="rail-action-count">
-              {scanState === "done" && eventCount
-                ? `${eventCount.toLocaleString()} events` : "—"}
+              {eventCount ? `${eventCount.toLocaleString()} events` : "—"}
             </span>
           </button>
 

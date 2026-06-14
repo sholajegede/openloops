@@ -1,8 +1,28 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { getAssistantModel, setAssistantModel, getAssistantEffort, setAssistantEffort } from "../lib/settings";
 import type { Brand, IntentThread } from "../types";
 
-// Same model + headers as src/pipeline/label.ts — keep these in sync.
-const MODEL = "claude-haiku-4-5-20251001";
+// Default model — same as src/pipeline/label.ts. The user can pick a different
+// one below; selection is persisted and used for every request.
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+
+const MODEL_OPTIONS: { id: string; label: string }[] = [
+  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 — fastest" },
+  { id: "claude-sonnet-4-6",          label: "Sonnet 4.6 — balanced" },
+  { id: "claude-opus-4-6",            label: "Opus 4.6 — most capable" },
+  { id: "claude-opus-4-7",            label: "Opus 4.7 — most capable" },
+  { id: "claude-opus-4-8",            label: "Opus 4.8 — most capable" },
+];
+
+// "Effort" here is a simple proxy for response depth via max_tokens — the
+// Messages API has no separate effort knob for these models.
+const EFFORT_OPTIONS: { id: string; label: string; maxTokens: number }[] = [
+  { id: "low",    label: "Low",    maxTokens: 512 },
+  { id: "medium", label: "Medium", maxTokens: 1024 },
+  { id: "high",   label: "High",   maxTokens: 2048 },
+];
+const DEFAULT_EFFORT = "medium";
 
 const SYSTEM_INSTRUCTION =
   `You are the assistant inside "openloops", a browser extension that reconstructs ` +
@@ -102,12 +122,29 @@ export default function Assistant({ threads, brands, selectedThread, apiKey, key
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [effort, setEffort] = useState(DEFAULT_EFFORT);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, sending]);
+
+  useEffect(() => {
+    void getAssistantModel().then((saved) => { if (saved) setModel(saved); });
+    void getAssistantEffort().then((saved) => { if (saved) setEffort(saved); });
+  }, []);
+
+  function handleModelChange(id: string) {
+    setModel(id);
+    void setAssistantModel(id);
+  }
+
+  function handleEffortChange(id: string) {
+    setEffort(id);
+    void setAssistantEffort(id);
+  }
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -126,6 +163,7 @@ export default function Assistant({ threads, brands, selectedThread, apiKey, key
 
     try {
       const systemPrompt = buildGroundingContext(threads, brands, selectedThread);
+      const maxTokens = EFFORT_OPTIONS.find((e) => e.id === effort)?.maxTokens ?? 1024;
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -136,8 +174,8 @@ export default function Assistant({ threads, brands, selectedThread, apiKey, key
           "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 1024,
+          model,
+          max_tokens: maxTokens,
           system: systemPrompt,
           messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
         }),
@@ -205,7 +243,11 @@ export default function Assistant({ threads, brands, selectedThread, apiKey, key
         ) : (
           messages.map((m, i) => (
             <div key={i} className={`assistant-message assistant-message-${m.role}`}>
-              {m.content}
+              {m.role === "assistant" ? (
+                <ReactMarkdown>{m.content}</ReactMarkdown>
+              ) : (
+                m.content
+              )}
             </div>
           ))
         )}
@@ -214,10 +256,10 @@ export default function Assistant({ threads, brands, selectedThread, apiKey, key
 
       {error && <p className="label-error assistant-error">{error}</p>}
 
-      {keySaved ? (
-        <div className="assistant-input-row">
+      <div className="assistant-composer">
+        {keySaved ? (
           <textarea
-            className="assistant-input"
+            className="assistant-textarea"
             placeholder="Ask about your open loops…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -225,18 +267,46 @@ export default function Assistant({ threads, brands, selectedThread, apiKey, key
             disabled={sending}
             rows={2}
           />
-          <button
-            type="button"
-            className="assistant-send-btn"
-            onClick={() => void send(input)}
-            disabled={sending || !input.trim()}
-          >
-            Send
-          </button>
+        ) : (
+          <p className="assistant-no-key">Add your Anthropic key above to chat.</p>
+        )}
+
+        <div className="assistant-toolbar">
+          <div className="assistant-toolbar-selects">
+            <select
+              className="assistant-select"
+              value={model}
+              onChange={(e) => handleModelChange(e.target.value)}
+              aria-label="Model"
+            >
+              {MODEL_OPTIONS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+            <select
+              className="assistant-select"
+              value={effort}
+              onChange={(e) => handleEffortChange(e.target.value)}
+              aria-label="Effort"
+            >
+              {EFFORT_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {keySaved && (
+            <button
+              type="button"
+              className="assistant-send-btn"
+              onClick={() => void send(input)}
+              disabled={sending || !input.trim()}
+            >
+              Send
+            </button>
+          )}
         </div>
-      ) : (
-        <p className="assistant-no-key">Add your Anthropic key above to chat.</p>
-      )}
+      </div>
 
       <p className="assistant-privacy">
         Chats send your thread titles and summaries to Anthropic. Nothing else leaves your device.
