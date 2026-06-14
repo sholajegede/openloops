@@ -732,6 +732,15 @@ button { cursor: pointer; }
 
 /* ── Error messages ── */
 
+/* Enrichment error — amber (warning) because labeling still proceeds */
+.enrich-error {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #d8b25e;
+  line-height: 1.4;
+}
+
+/* Labeling error — red (blocking) */
 .label-error {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -934,4 +943,89 @@ button { cursor: pointer; }
 
 .overview-date-sep {
   color: var(--text-3);
+}
+
+/* ══════════════════════════════════════════
+   PHASE 7a — THREAD CARD INTERACTION
+   ══════════════════════════════════════════ */
+
+/* Whole card is clickable */
+.thread-card {
+  cursor: pointer;
+}
+
+/* Selected card gets accent left-border + faint glow */
+.thread-card-selected {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+              inset 3px 0 0 var(--accent);
+}
+
+/* Next-step row — prominent, accent left-bar */
+.thread-next-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--accent);
+}
+
+.thread-next-marker {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent);
+  flex-shrink: 0;
+  line-height: 1.45;
+}
+
+.thread-next-text {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--text-2);
+  line-height: 1.45;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Resume button — accent fill, sits beside next-step text */
+.thread-resume-btn {
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  align-self: flex-start;
+  transition: opacity 0.1s;
+}
+
+.thread-resume-btn:hover { opacity: 0.88; }
+
+/* Details toggle — quiet mono link */
+.thread-details-toggle {
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  color: var(--text-3);
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 0;
+  transition: color 0.1s;
+}
+
+.thread-details-toggle:hover { color: var(--text-2); }
+
+/* Collapsible details section */
+.thread-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }

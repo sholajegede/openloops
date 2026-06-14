@@ -1,5 +1,5 @@
 import type { RawEvent } from "../types";
-import { isHttpUrl } from "../lib/util";
+import { isHttpUrl, isLocalHost } from "../lib/util";
 
 // ---------------------------------------------------------------------------
 // Filter 1: static utility / comms domain blocklist
@@ -114,5 +114,6 @@ function titleIsGeneric(title: string, domain: string): boolean {
 export function isNoise(event: RawEvent): boolean {
   // Belt-and-suspenders: drop non-web URLs even if they somehow reached the store.
   if (!isHttpUrl(event.url)) return true;
+  if (isLocalHost(event.domain)) return true;
   return domainIsBlocked(event.domain) || titleIsGeneric(event.title, event.domain);
 }

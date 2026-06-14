@@ -58,6 +58,39 @@ function formatDuration(startedAt: number, endedAt: number): string {
   return `${h}h ${m}m`;
 }
 
+// ---------------------------------------------------------------------------
+// Resume helper — opens the most-recent meaningful pages in the thread
+// ---------------------------------------------------------------------------
+
+// Well-known ambient/utility domains that are unhelpful as "resume" targets.
+const RESUME_SKIP_DOMAINS = new Set([
+  "google.com", "youtube.com", "bing.com", "duckduckgo.com",
+  "gmail.com", "mail.google.com", "google.co.uk", "google.ca",
+  "google.com.au", "google.de", "google.fr",
+]);
+
+function resumeThread(thread: IntentThread): void {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+
+  // Sort all events most-recent first, skip ambient domains, dedupe by URL.
+  const sorted = thread.sessions
+    .flatMap((s) => s.events)
+    .sort((a, b) => b.visitedAt - a.visitedAt);
+
+  for (const ev of sorted) {
+    if (RESUME_SKIP_DOMAINS.has(ev.domain)) continue;
+    if (seen.has(ev.url)) continue;
+    seen.add(ev.url);
+    urls.push(ev.url);
+    if (urls.length >= 3) break;
+  }
+
+  // Open most-recent as active, others in background.
+  urls.forEach((url, i) => {
+    chrome.tabs.create({ url, active: i === 0 });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // DomainChip — shows brand logo when enriched, monogram fallback otherwise
@@ -98,22 +131,32 @@ function DomainChip({ domain, logoUrl: chipLogoUrl, brandColor }: DomainChipProp
 }
 
 // ---------------------------------------------------------------------------
-// ThreadCard
+// ThreadCard — leads with meaning, detail tucked away
 // ---------------------------------------------------------------------------
 
-function ThreadCard({ thread, brands }: { thread: IntentThread; brands: Map<string, Brand> }) {
+interface ThreadCardProps {
+  thread: IntentThread;
+  brands: Map<string, Brand>;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+function ThreadCard({ thread, brands, isSelected, onSelect }: ThreadCardProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   const totalEvents = thread.sessions.reduce((n, s) => n + s.events.length, 0);
   const topDomains  = [...new Set(thread.sessions.flatMap((s) => s.domains))].slice(0, 4);
   const allKeywords = [...new Set(thread.sessions.flatMap((s) => s.keywords))].slice(0, 8);
 
   return (
-    <li className="thread-card">
-
-      {/* ── Title + type/status ── */}
+    <li
+      className={`thread-card${isSelected ? " thread-card-selected" : ""}`}
+      onClick={onSelect}
+    >
+      {/* ── Title + type/status pill ── */}
       <div className="thread-header">
         <div className="thread-title-block">
           <h3 className="thread-title">{thread.title}</h3>
-          {thread.summary && <p className="thread-summary">{thread.summary}</p>}
         </div>
         <div className="thread-label-group">
           <span className="thread-type-label">{thread.type.toUpperCase()}</span>
@@ -123,6 +166,26 @@ function ThreadCard({ thread, brands }: { thread: IntentThread; brands: Map<stri
         </div>
       </div>
 
+      {/* ── Summary — primary human sentence ── */}
+      {thread.summary && (
+        <p className="thread-summary">{thread.summary}</p>
+      )}
+
+      {/* ── Next step + Resume ── */}
+      {thread.nextStep && (
+        <div className="thread-next-row">
+          <span className="thread-next-marker">→</span>
+          <span className="thread-next-text">{thread.nextStep}</span>
+          <button
+            type="button"
+            className="thread-resume-btn"
+            onClick={(e) => { e.stopPropagation(); resumeThread(thread); }}
+          >
+            Resume
+          </button>
+        </div>
+      )}
+
       {/* ── Confidence bar ── */}
       <div className="confidence-row">
         <div className="confidence-bar-track">
@@ -131,44 +194,54 @@ function ThreadCard({ thread, brands }: { thread: IntentThread; brands: Map<stri
         <span className="confidence-pct">{Math.round(thread.confidence * 100)}%</span>
       </div>
 
-      {/* ── Meta row ── */}
-      <p className="thread-meta">
-        {thread.sessions.length} session{thread.sessions.length !== 1 ? "s" : ""}
-        {" · "}{totalEvents} event{totalEvents !== 1 ? "s" : ""}
-        {" · "}{thread.distinctDays} day{thread.distinctDays !== 1 ? "s" : ""}
-        {" · "}{relativeTime(thread.lastSeen)}
-      </p>
+      {/* ── Details toggle ── */}
+      <button
+        type="button"
+        className="thread-details-toggle"
+        onClick={(e) => { e.stopPropagation(); setDetailsOpen((v) => !v); }}
+      >
+        {detailsOpen ? "▲ hide details" : "▼ details"}
+      </button>
 
-      {/* ── Domain chips ── */}
-      {topDomains.length > 0 && (
-        <div className="domain-chips">
-          {topDomains.map((d) => (
-            <DomainChip
-              key={d}
-              domain={d}
-              logoUrl={brands.get(d)?.logoUrl}
-              brandColor={brands.get(d)?.brandColor}
-            />
-          ))}
+      {/* ── Collapsible details ── */}
+      {detailsOpen && (
+        <div className="thread-details">
+          <p className="thread-meta">
+            {thread.sessions.length} session{thread.sessions.length !== 1 ? "s" : ""}
+            {" · "}{totalEvents} event{totalEvents !== 1 ? "s" : ""}
+            {" · "}{thread.distinctDays} day{thread.distinctDays !== 1 ? "s" : ""}
+            {" · "}{relativeTime(thread.lastSeen)}
+          </p>
+
+          {topDomains.length > 0 && (
+            <div className="domain-chips">
+              {topDomains.map((d) => (
+                <DomainChip
+                  key={d}
+                  domain={d}
+                  logoUrl={brands.get(d)?.logoUrl}
+                  brandColor={brands.get(d)?.brandColor}
+                />
+              ))}
+            </div>
+          )}
+
+          {allKeywords.length > 0 && (
+            <div className="keyword-tags">
+              {allKeywords.map((kw) => (
+                <span key={kw} className="keyword-tag">{kw}</span>
+              ))}
+            </div>
+          )}
+
+          {thread.signals.length > 0 && (
+            <ul className="signals-list">
+              {thread.signals.map((sig) => (
+                <li key={sig} className="signal-item">{sig}</li>
+              ))}
+            </ul>
+          )}
         </div>
-      )}
-
-      {/* ── Keywords ── */}
-      {allKeywords.length > 0 && (
-        <div className="keyword-tags">
-          {allKeywords.map((kw) => (
-            <span key={kw} className="keyword-tag">{kw}</span>
-          ))}
-        </div>
-      )}
-
-      {/* ── Signals ── */}
-      {thread.signals.length > 0 && (
-        <ul className="signals-list">
-          {thread.signals.map((sig) => (
-            <li key={sig} className="signal-item">{sig}</li>
-          ))}
-        </ul>
       )}
     </li>
   );
@@ -218,14 +291,12 @@ interface OverviewPanelProps {
 function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps) {
   const totalThreads = threads.length;
 
-  // Status distribution
   const statusCounts = {
     active:  threads.filter((t) => t.status === "active").length,
     stalled: threads.filter((t) => t.status === "stalled").length,
     dormant: threads.filter((t) => t.status === "dormant").length,
   };
 
-  // Top 5 domains by event count
   const domainMap = new Map<string, { events: number; threads: number }>();
   for (const thread of threads) {
     const threadDomains = new Set<string>();
@@ -247,7 +318,6 @@ function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps
     .sort((a, b) => b[1].events - a[1].events)
     .slice(0, 5);
 
-  // Date range from thread firstSeen / lastSeen timestamps
   const allTimestamps = threads.flatMap((t) => [t.firstSeen, t.lastSeen]);
   const dateStart = allTimestamps.length > 0 ? Math.min(...allTimestamps) : null;
   const dateEnd   = allTimestamps.length > 0 ? Math.max(...allTimestamps) : null;
@@ -259,7 +329,6 @@ function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps
     <aside className="overview-panel">
       <div className="overview-eyebrow">Overview</div>
 
-      {/* Totals */}
       <div className="overview-section">
         <div className="overview-stat">
           <span className="overview-stat-value">
@@ -281,7 +350,6 @@ function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps
         </div>
       </div>
 
-      {/* Status distribution */}
       {totalThreads > 0 && (
         <div className="overview-section">
           <div className="overview-section-label">Status</div>
@@ -300,7 +368,6 @@ function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps
         </div>
       )}
 
-      {/* Top domains */}
       {topDomains.length > 0 && (
         <div className="overview-section">
           <div className="overview-section-label">Top Domains</div>
@@ -315,7 +382,6 @@ function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps
         </div>
       )}
 
-      {/* Date range */}
       {dateStart !== null && dateEnd !== null && (
         <div className="overview-section">
           <div className="overview-section-label">Date Range</div>
@@ -363,20 +429,22 @@ export default function App() {
   const [contextKey, setContextKeyState]       = useState("");
   const [contextKeySaved, setContextKeySaved]  = useState(false);
   const [enriching, setEnriching]              = useState(false);
+  const [enrichError, setEnrichError]          = useState<string | null>(null);
   const [brands, setBrands]                    = useState<Map<string, Brand>>(new Map());
 
   // AI labeling
-  const [apiKey, setApiKeyState]   = useState("");
-  const [keySaved, setKeySaved]    = useState(false);
-  const [labeling, setLabeling]    = useState(false);
+  const [apiKey, setApiKeyState]    = useState("");
+  const [keySaved, setKeySaved]     = useState(false);
+  const [labeling, setLabeling]     = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
 
   // UI state
   const [visibleStatuses, setVisibleStatuses] = useState<Set<IntentThread["status"]>>(
     new Set(ALL_STATUSES)
   );
-  const [sessionsOpen, setSessionsOpen] = useState(false);
-  const [eventsOpen, setEventsOpen]     = useState(false);
+  const [sessionsOpen, setSessionsOpen]     = useState(false);
+  const [eventsOpen, setEventsOpen]         = useState(false);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
   useEffect(() => {
     void refreshAll();
@@ -450,25 +518,32 @@ export default function App() {
 
   async function handleEnrichAndLabel() {
     setLabelError(null);
+    setEnrichError(null);
 
-    // Enrichment phase — skip gracefully if no context.dev key is saved.
+    // Enrichment phase — skip if no context.dev key is saved.
+    // enrichDomains never throws; button state always resets via finally.
     if (contextKey.trim() && contextKeySaved) {
       setEnriching(true);
       try {
         const allDomains = [...new Set(
           threads.flatMap((t) => t.sessions.flatMap((s) => s.domains))
         )];
-        await enrichDomains(contextKey.trim(), allDomains);
-        const all = await getAllBrands();
-        setBrands(new Map(all.map((b) => [b.domain, b])));
+        const result = await enrichDomains(contextKey.trim(), allDomains);
+        if (result.error) {
+          setEnrichError(`context.dev: ${result.error}`);
+        }
+        if (result.enriched > 0) {
+          const all = await getAllBrands();
+          setBrands(new Map(all.map((b) => [b.domain, b])));
+        }
       } catch (err) {
-        console.warn("[openloops] enrichment failed:", err);
+        setEnrichError(`context.dev: ${err instanceof Error ? err.message : "unknown error"}`);
       } finally {
         setEnriching(false);
       }
     }
 
-    // Labeling phase — requires the Anthropic key.
+    // Always proceed to labeling regardless of enrichment outcome.
     setLabeling(true);
     try {
       await labelThreads(apiKey.trim());
@@ -486,6 +561,10 @@ export default function App() {
       if (next.has(s)) next.delete(s); else next.add(s);
       return next;
     });
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedThreadId((prev) => (prev === id ? null : id));
   }
 
   // Group threads by status, sorted by confidence desc within each group
@@ -518,7 +597,7 @@ export default function App() {
         <div className="rail-section">
           <div className="rail-eyebrow">Pipeline</div>
 
-          <button className="rail-action" onClick={handleScan} disabled={scanning}>
+          <button type="button" className="rail-action" onClick={handleScan} disabled={scanning}>
             <span className="rail-action-label">
               {scanning ? "Scanning…" : "Scan my history"}
             </span>
@@ -529,6 +608,7 @@ export default function App() {
           </button>
 
           <button
+            type="button"
             className="rail-action"
             onClick={handleBuildSessions}
             disabled={buildingSessions || !eventCount}
@@ -543,6 +623,7 @@ export default function App() {
           </button>
 
           <button
+            type="button"
             className="rail-action rail-action-accent"
             onClick={handleBuildThreads}
             disabled={buildingThreads || !sessionCount}
@@ -572,6 +653,7 @@ export default function App() {
             />
             <div className="rail-key-btns">
               <button
+                type="button"
                 className="rail-btn"
                 onClick={handleSaveContextKey}
                 disabled={!contextKey.trim() || contextKeySaved}
@@ -593,6 +675,7 @@ export default function App() {
             />
             <div className="rail-key-btns">
               <button
+                type="button"
                 className="rail-btn"
                 onClick={handleSaveKey}
                 disabled={!apiKey.trim() || keySaved}
@@ -600,6 +683,7 @@ export default function App() {
                 {keySaved ? "Saved ✓" : "Save key"}
               </button>
               <button
+                type="button"
                 className="rail-btn rail-btn-accent"
                 onClick={handleEnrichAndLabel}
                 disabled={enriching || labeling || !keySaved || threads.length === 0}
@@ -607,7 +691,8 @@ export default function App() {
                 {enriching ? "Enriching…" : labeling ? "Labeling…" : "Label & enrich"}
               </button>
             </div>
-            {labelError && <p className="label-error">{labelError}</p>}
+            {enrichError && <p className="enrich-error">{enrichError}</p>}
+            {labelError  && <p className="label-error">{labelError}</p>}
           </div>
         </div>
 
@@ -619,6 +704,7 @@ export default function App() {
             return (
               <button
                 key={s}
+                type="button"
                 className={`filter-row${on ? "" : " off"}`}
                 onClick={() => toggleStatus(s)}
               >
@@ -662,7 +748,15 @@ export default function App() {
                     </h2>
                   </div>
                   <ul className="thread-list">
-                    {items.map((t) => <ThreadCard key={t.id} thread={t} brands={brands} />)}
+                    {items.map((t) => (
+                      <ThreadCard
+                        key={t.id}
+                        thread={t}
+                        brands={brands}
+                        isSelected={selectedThreadId === t.id}
+                        onSelect={() => toggleSelect(t.id)}
+                      />
+                    ))}
                   </ul>
                 </section>
               );
@@ -676,6 +770,7 @@ export default function App() {
 
           <div className="collapsible-section">
             <button
+              type="button"
               className="collapsible-header"
               onClick={() => setSessionsOpen((v) => !v)}
             >
@@ -699,6 +794,7 @@ export default function App() {
 
           <div className="collapsible-section">
             <button
+              type="button"
               className="collapsible-header"
               onClick={() => setEventsOpen((v) => !v)}
             >
@@ -731,14 +827,14 @@ export default function App() {
 
         <footer className="main-footer">
           <span className="brand-credit">
-            built with ❤️ by{" "}
+            brand data by{" "}
             <a
-              href="https://www.linkedin.com/in/sholajegede"
+              href="https://context.dev"
               target="_blank"
               rel="noopener noreferrer"
               className="brand-credit-link"
             >
-              sholajegede
+              context.dev
             </a>
           </span>
         </footer>

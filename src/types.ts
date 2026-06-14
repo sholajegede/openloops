@@ -23,6 +23,7 @@ export interface IntentThread {
   id: string;
   title: string;
   summary?: string;
+  nextStep?: string;   // one concrete action to move the thread forward (Phase 7a)
   sessions: Session[];
   type: "buying" | "research" | "planning" | "learning" | "unclassified";
   confidence: number;        // 0-1

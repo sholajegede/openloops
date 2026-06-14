@@ -24,6 +24,27 @@ export function extractDomain(url: string): string {
 }
 
 /**
+ * True for localhost, loopback/private IPs, and ".local" hostnames — dev
+ * servers and LAN devices that carry no browsing intent and that context.dev
+ * can never resolve.
+ */
+export function isLocalHost(domain: string): boolean {
+  if (domain === "localhost" || domain === "127.0.0.1") return true;
+  if (domain.endsWith(".local")) return true;
+
+  // Private IPv4 ranges: 10.x.x.x, 172.16.x.x-172.31.x.x, 192.168.x.x
+  const octets = domain.split(".");
+  if (octets.length === 4 && octets.every((o) => /^\d{1,3}$/.test(o))) {
+    const [a, b] = octets.map(Number);
+    if (a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+  }
+
+  return false;
+}
+
+/**
  * Produce a short, deterministic ID for a (url, visitedAt) pair using a
  * djb2-style hash. Running backfill twice for the same visit produces the
  * same ID, so putEvents (which uses IDB's "put" not "add") overwrites rather
