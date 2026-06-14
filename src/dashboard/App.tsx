@@ -959,14 +959,14 @@ export default function App() {
 
         <footer className="main-footer">
           <span className="brand-credit">
-            brand data by{" "}
+            built with ❤️  by{" "}                                           
             <a
-              href="https://context.dev"
+              href="https://www.linkedin.com/in/sholajegede"
               target="_blank"
               rel="noopener noreferrer"
               className="brand-credit-link"
             >
-              context.dev
+              shola jegede
             </a>
           </span>
         </footer>

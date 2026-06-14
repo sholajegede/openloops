@@ -5,8 +5,8 @@
 <h1 align="center">openloops</h1>
 
 <p align="center">
-  Your browser records every page you open. It forgets why.<br/>
-  <strong>openloops</strong> reconstructs the why — entirely on your machine.
+  Your browser records everything. It understands nothing.<br/>
+  <strong>openloops</strong> is the AI intelligence for your browser history — reconstructing what you were trying to do, and helping you finish it, entirely on your machine.
 </p>
 
 <p align="center">
@@ -15,8 +15,13 @@
   <img src="https://img.shields.io/badge/Vite-5.x-646cff?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
   <img src="https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react&logoColor=black" alt="React 18" />
   <img src="https://img.shields.io/badge/storage-IndexedDB-f7931e?style=flat-square" alt="IndexedDB" />
-  <img src="https://img.shields.io/badge/AI%20labeling-Claude%20Haiku%204.5-cc785c?style=flat-square" alt="Claude Haiku 4.5" />
+  <img src="https://img.shields.io/badge/AI%20labeling-Claude-cc785c?style=flat-square" alt="Claude AI labeling" />
+  <img src="https://img.shields.io/badge/AI%20assistant-model%20selectable-cc785c?style=flat-square" alt="AI Assistant" />
   <img src="https://img.shields.io/badge/100%25%20local-no%20servers-22c55e?style=flat-square" alt="100% local" />
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sholajegede/openloops/main/public/screenshot.png" alt="openloops intent map with the AI assistant prioritizing what to close this week, with reasons" width="900" />
 </p>
 
 ## What this is
@@ -25,7 +30,9 @@ openloops is a local-only Chrome extension that turns raw browsing history into 
 
 Not bookmarks. Not a reading list. Threads: an active decision still in progress, a product you were comparing before you got distracted, a question you keep returning to. openloops surfaces those patterns from what you were actually doing, groups them into coherent research arcs, and scores how alive each thread still is.
 
-Everything runs on-device. There are two optional enrichment features — brand data via [context.dev](https://context.dev) and AI thread labeling via Claude Haiku — each triggered explicitly with your own API key. Neither sends raw URLs, page content, or browsing history.
+Every thread gets a plain-language summary, a concrete next step, and a **Resume** button that reopens the pages you left off on. A built-in AI assistant sits in the dashboard's right column — ask "what should I close this week?" and it ranks your open threads by how easy they are to resolve versus how much of a real decision they still need, with a one-line reason for each. Click a thread to focus the assistant on it and ask how to finish that one specifically.
+
+Everything runs on-device. There are three optional, opt-in features, each triggered explicitly with your own API key: brand enrichment via [context.dev](https://context.dev), AI thread labeling via Claude, and the AI assistant chat. None of them send raw URLs, page content, or full browsing history.
 
 ## How it works
 
@@ -39,58 +46,66 @@ Everything runs on-device. There are two optional enrichment features — brand 
                   ▼
 ┌─────────────────────────────────────────────────┐
 │                NOISE FILTER                      │
-│  domain blocklist · generic titles              │
-│  platform stopwords · adult/junk domains        │
+│  domain blocklist · generic titles               │
+│  platform stopwords · adult/junk domains         │
+│  localhost · private IPs · dev servers           │
 └─────────────────┬───────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────┐
 │             SESSION SEGMENTATION                 │
-│  30-minute idle gap splits a new session        │
-│  keyword extraction per session                 │
+│  30-minute idle gap splits a new session         │
+│  keyword extraction per session                  │
 └─────────────────┬───────────────────────────────┘
                   │  sessions (IndexedDB)
                   ▼
 ┌─────────────────────────────────────────────────┐
 │           AMBIENT DOMAIN DETECTION               │
-│  ubiquity = distinct days / total active days   │
-│  ≥ 0.6 on ≥ 3 days → excluded from clustering  │
+│  ubiquity = distinct days / total active days    │
+│  ≥ 0.6 on ≥ 3 days → excluded from clustering   │
 └─────────────────┬───────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────┐
 │               CLUSTERING                         │
-│  greedy agglomerative · Jaccard similarity      │
-│  0.5 × domain overlap + 0.5 × keyword overlap   │
+│  greedy agglomerative · Jaccard similarity       │
+│  0.5 × domain overlap + 0.5 × keyword overlap    │
 └─────────────────┬───────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────┐
 │                 SCORING                          │
-│  type (buying/research/learning/planning)       │
-│  confidence · status · human-readable signals   │
+│  type (buying/research/learning/planning)        │
+│  confidence · status · human-readable signals    │
 └─────────────────┬───────────────────────────────┘
                   │  intent_threads (IndexedDB)
                   ▼
 ┌─────────────────────────────────────────────────┐
 │              INTENT MAP (dashboard)              │
-│  React · full Chrome tab                        │
+│  status-grouped cards · Resume · React           │
 └─────────────────┬───────────────────────────────┘
                   │  optional, opt-in
                   ▼
 ┌─────────────────────────────────────────────────┐
 │         BRAND ENRICHMENT (opt-in)                │
-│  context.dev · domain names only                │
-│  → company name · industry · description        │
-│  → logo URL · brand color                       │
+│  context.dev · domain names only                 │
+│  → company name · industry · description         │
+│  → logo URL · brand color                        │
 └─────────────────┬───────────────────────────────┘
                   │  optional, opt-in
                   ▼
 ┌─────────────────────────────────────────────────┐
 │              AI LABELING (opt-in)                │
-│  Claude Haiku 4.5 · your key · one batch call   │
-│  grounded in enriched company descriptions      │
-│  → rewrites title + summary + type per thread   │
+│  Claude · your key · batched (10 threads/req)    │
+│  grounded in enriched company descriptions       │
+│  → title + summary + type + next step per thread │
+└─────────────────┬───────────────────────────────┘
+                  │  optional, opt-in
+                  ▼
+┌─────────────────────────────────────────────────┐
+│              AI ASSISTANT (opt-in)               │
+│  chat grounded in your threads · your key        │
+│  model + effort selectable · focus on a thread   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -99,59 +114,74 @@ Everything runs on-device. There are two optional enrichment features — brand 
 | Stage | What it does | Where in code |
 |---|---|---|
 | **Capture** | Backfills 14 days via the History API (`search` + per-URL `getVisits`); live-captures new visits via `tabs.onUpdated`. Skips non-HTTP schemes, deduplicates within 3 s. | `src/pipeline/backfill.ts`, `src/background.ts` |
-| **Noise filter** | Drops events matching a domain blocklist (comms tools), adult/junk domains, and generic/navigational titles (e.g. "New Tab", "Loading…"). Also strips platform brand tokens before keyword extraction. | `src/pipeline/noise.ts`, `src/pipeline/keywords.ts` |
+| **Noise filter** | Drops events matching a domain blocklist (comms tools), adult/junk domains, generic/navigational titles (e.g. "New Tab", "Loading…"), and `localhost` / `127.0.0.1` / `*.local` / private IP ranges — your own dev servers and LAN devices. Also strips platform brand tokens before keyword extraction. | `src/pipeline/noise.ts`, `src/pipeline/keywords.ts`, `src/lib/util.ts` (`isLocalHost`) |
 | **Sessions** | Splits the event stream into sessions wherever a 30-minute idle gap occurs. Extracts top keywords per session; prunes trivial single-event, zero-keyword sessions. | `src/pipeline/sessions.ts`, `src/pipeline/keywords.ts` |
-| **Ambient detection** | Computes per-domain ubiquity (distinct days seen ÷ total active days). Domains present on ≥ 60 % of active days over ≥ 3 days (Google, YouTube, etc.) are excluded from similarity scoring. | `src/pipeline/ambient.ts` |
+| **Ambient detection** | Computes per-domain ubiquity (distinct days seen ÷ total active days). Domains present on ≥ 60% of active days over ≥ 3 days (Google, YouTube, etc.) are excluded from similarity scoring. | `src/pipeline/ambient.ts` |
 | **Clustering** | Greedy agglomerative pass over chronological sessions. Similarity = 0.5 × domain Jaccard + 0.5 × keyword Jaccard (over non-ambient domains). Sessions above the threshold join the nearest thread; otherwise they start a new one. Prunes threads with 1 session and fewer than 3 events. | `src/pipeline/threads.ts` |
-| **Scoring** | Assigns type via keyword scanning (`BUYING_WORDS`, `LEARNING_WORDS`). Computes confidence from four weighted signals: distinct days (35 %), sessions (25 %), events (20 %), clear type (20 %). Sets status: active < 48 h, stalled < 7 d, dormant otherwise. | `src/pipeline/threads.ts` |
-| **Brand enrichment** | Optional. Sends the domain names found in each thread to the context.dev API. Returns structured company records — name, industry, one-sentence description, logo URL, brand color — which are stored on the thread and displayed as domain chips in the UI. Only domain names leave the device; no URLs or page content. | `src/pipeline/enrich.ts` |
-| **AI labeling** | Optional. Sends compact thread descriptors (keywords, domain names, and the enriched company descriptions from the previous step — no raw URLs or page content) to Claude Haiku 4.5 in a single batched call. Overwrites title and type, and adds a one-sentence summary per thread. The enriched descriptions ground the model in what each site actually is rather than what the user searched for on it. Requires the user's own Anthropic API key. | `src/pipeline/label.ts` |
+| **Scoring** | Assigns type via keyword scanning (`BUYING_WORDS`, `LEARNING_WORDS`). Computes confidence from four weighted signals: distinct days (35%), sessions (25%), events (20%), clear type (20%). Sets status: active < 48h, stalled < 7d, dormant otherwise. | `src/pipeline/threads.ts` |
+| **Brand enrichment** | Optional. Sends the domain names found in each thread to the context.dev API (skipping `localhost`/private hosts). Returns structured company records — name, industry, one-sentence description, logo URL, brand color — stored on the thread and displayed as domain chips. Results are cached, so a domain is only resolved once. Only domain names leave the device. | `src/pipeline/enrich.ts` |
+| **AI labeling** | Optional. Sends compact thread descriptors — keywords, domain names, a sample of page titles, and (when enrichment has run) the enriched company descriptions — to Claude in batches of 10 threads per request. Overwrites title and type, and adds a one-sentence summary **and a concrete next step** per thread. Requires the user's own Anthropic API key. | `src/pipeline/label.ts` |
+| **AI assistant** | Optional. A chat in the dashboard's right column, grounded in thread titles, summaries, next steps, and domains — and, when a thread is focused, its keywords, recent page titles, and enriched company descriptions. Model (Haiku 4.5 / Sonnet 4.6 / Opus 4.6 / 4.7 / 4.8) and "effort" (response depth) are user-selectable and persisted. Uses the same Anthropic key as labeling. | `src/dashboard/Assistant.tsx` |
 
 ## The intelligence layer
 
-The two optional enrichment steps are designed to work together, and the order matters.
+The optional intelligence features build on each other, and each one works on its own.
 
-**Brand enrichment (context.dev)** resolves the domain names that appear in each thread into structured company records: a canonical name, an industry category, a one-sentence description of what the company does, a logo URL, and a brand color. This data is stored on the thread object and surfaced in the UI as domain chips — a small monogram square that becomes a real logo in the enriched state, with the brand color as a tint.
+**Brand enrichment (context.dev)** resolves the domain names that appear in each thread into structured company records: a canonical name, an industry category, a one-sentence description of what the company does, a logo URL, and a brand color. This data is stored on the thread and surfaced in the UI as domain chips — a small monogram square that becomes a real logo, with the brand color as an accent, once enriched.
 
 The key insight is that domain names alone are weak signals. `stripe.com` and `dashboard.stripe.com/logs` are the same intent; `linear.app` and `linear.app/issues/ABC-123` are the same company. The enriched description — "Linear is a project management tool for software teams" — is a far stronger input to a classifier than the raw keyword tokens extracted from page titles.
 
-**AI labeling (Claude Haiku)** receives the enriched thread descriptors. Each descriptor contains the thread's top keywords, its top domain names, a sample of page titles, and — when enrichment has run — the company descriptions for each domain. The model is asked to assign a short title, a one-sentence summary, and a type (buying / research / learning / planning / unclassified) per thread. With enrichment, it is working from grounded facts about what each site is; without it, it is working purely from page-title keywords.
+**AI labeling (Claude)** receives the (optionally enriched) thread descriptors in batches of 10. Each descriptor contains the thread's top keywords, top domains, a sample of page titles, and — when enrichment has run — the company descriptions for each domain. The model assigns a short title, a one-sentence summary, a type (buying / research / learning / planning / unclassified), and **one concrete next step**: a specific action that would move the thread forward or close it (e.g. "Decide between the MacBook Pro and the Dell XPS — your open question was battery life"). With enrichment, it's working from grounded facts about what each site is; without it, from page-title keywords alone.
 
-Neither step is required. The core pipeline — capture, noise filter, sessions, clustering, scoring — runs entirely on-device and produces a working intent map with no network calls. Enrichment and labeling sharpen the output but do not change the underlying data structure.
+**AI assistant** is a chat that lives in the dashboard's right column, grounded in your thread data — titles, summaries, next steps, and domains for every thread, plus a focused thread's keywords, recent page titles, and enriched company descriptions when you click a card to select it. Ask it things like "what should I close this week?" or "what have I stalled on longest?", or focus a thread and ask "how do I finish this one?". You can pick the model (Haiku 4.5 by default, or Sonnet 4.6, Opus 4.6, Opus 4.7, Opus 4.8) and an "effort" level (Low / Medium / High, mapped to `max_tokens` as a simple proxy for response depth); both choices persist across sessions.
+
+None of the three steps is required. The core pipeline — capture, noise filter, sessions, clustering, scoring — runs entirely on-device and produces a working intent map with no network calls. context.dev is purely an enhancement: AI labeling and the assistant both work with just an Anthropic key, and get sharper when context.dev is also configured.
 
 ## Privacy
 
 The core pipeline — capture, noise filtering, session segmentation, ambient detection, clustering, and scoring — runs **entirely on-device** in IndexedDB. No data leaves your machine, and there are no servers, accounts, analytics, or telemetry of any kind.
 
-There are exactly **two optional, opt-in network calls**, both triggered manually by you:
+There are exactly **three optional, opt-in network calls**, each triggered manually by you with your own API key:
 
 | What leaves your device | When | Where it goes |
 |---|---|---|
-| Domain names only (e.g. `stripe.com`, `notion.so`) | When you click "Enrich" with a context.dev key | `api.context.dev` |
-| Thread keywords, domain names, and a sample of page titles | When you click "Label with AI" with an Anthropic key | `api.anthropic.com` |
+| Domain names only (e.g. `stripe.com`, `notion.so`) — never `localhost`, private IPs, or `.local` hosts | Clicking "Label & enrich" with a context.dev key saved | `api.context.dev` |
+| Thread keywords, domain names, a sample of page titles, and (if enriched) company descriptions | Clicking "Label & enrich" with an Anthropic key saved | `api.anthropic.com` |
+| Thread titles, summaries, next steps, and domains for all threads — plus, if a thread is focused, its keywords, recent page titles, and enriched company descriptions | Each message sent to the AI assistant | `api.anthropic.com` |
 
-Neither call ever sends raw URLs, full page content, browsing timestamps, or anything that could identify a specific page visit. Both are skipped entirely if you do not add a key.
+None of these calls ever send raw URLs, full page content, browsing timestamps, or anything that could identify a specific page visit. All three are skipped entirely if you don't add the relevant key — context.dev in particular is purely an enhancement, marked optional in the UI, and "Label & enrich" works fully with just an Anthropic key.
 
 Both API keys are stored in `chrome.storage.local` — on-device, never in the repository, and never transmitted anywhere other than the respective API endpoint during the operation they enable.
 
 ## The dashboard
 
-The dashboard is a full Chrome tab (not a popup) with three sections:
+The dashboard opens as a full Chrome tab (via `options_page`), laid out in three columns.
 
-**Intent Map** — one card per thread, sorted by status then confidence. Each card shows:
-- Title (heuristic keyword-derived, or AI-generated after labeling)
-- AI summary (one sentence, appears after labeling)
-- Type badge (`buying`, `research`, `learning`, `planning`, `unclassified`) and status pill (`active`, `stalled`, `dormant`)
-- Confidence bar (0–100 %)
-- Session / event / day counts and relative timestamp
-- Top domains and keywords
-- Signals: human-readable explanations for why the thread scored the way it did
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sholajegede/openloops/main/public/home.png" alt="openloops welcome screen on first run" width="900" />
+</p>
 
-**Sessions** — the full list of browsing sessions, most recent first. Shows time, duration, domains, and keywords per session.
 
-**Raw Events** — the 20 most recently captured events for quick inspection.
+**Left rail**
+- **Pipeline** — three actions: *Scan my history*, *Build sessions*, *Build intent map*. Each shows its output count once run. Buttons follow a simple state machine: disabled until their input exists, accent-highlighted on whichever step is next, and normal (still re-runnable) once done.
+- **Intelligence** — an Anthropic key field and a context.dev key field, each with a "Save key" button and a "Get a … API key →" link to the provider's key page. context.dev is marked optional. A single **Label & enrich** button runs enrichment first (if a context.dev key is saved) and then AI labeling (if an Anthropic key is saved) — either works independently.
+- **Filter** — toggle ACTIVE / STALLED / DORMANT threads on or off in the main column.
 
-Below the Intent Map header: a password input for your Anthropic API key, a **Save key** button, and a **Label with AI** button.
+**Main column**
+On first run, before an intent map exists, a centered welcome screen shows the logo, tagline, a short explainer, a 3-step preview (Scan → Build sessions → Build intent map), and a single CTA button that always matches whichever pipeline step is next.
+
+Once an intent map exists, threads render as cards grouped under ACTIVE / STALLED / DORMANT headers, sorted by confidence within each group. Each card shows:
+- Title and one-sentence summary (AI-generated after labeling; a heuristic keyword-derived title before that)
+- A **next step** with a **Resume** button that reopens the thread's most recent non-ambient pages in new tabs
+- A type badge (`buying` / `research` / `learning` / `planning` / `unclassified`) and a status pill (`active` / `stalled` / `dormant`)
+- A confidence bar (0–100%)
+- A collapsible **details** section: session/event/day counts and last-active time, domain chips (real logos and brand-color accents once enriched), keyword pills, and human-readable "signals" explaining the classification
+
+Clicking a card selects it, which focuses the AI assistant on that thread. Below the intent map, a collapsible **Pipeline Detail** section holds the full **Sessions** list and the 20 most recent **Raw Events**.
+
+**Right column**
+- **Overview** — compact totals (events / sessions / threads), with a collapsible **Stats** disclosure showing status distribution, top domains, and date range.
+- **AI Assistant** — a chat grounded in your thread data, with markdown-rendered responses, suggested-prompt chips, a "Focused: {thread}" header with a clear (✕) button when a card is selected, and model + effort selectors that persist across sessions. Shows a prompt to add an Anthropic key if one isn't saved yet.
 
 ## Tuning
 
@@ -166,38 +196,41 @@ All tunables are named constants — change the value, rebuild, and re-run the p
 | `BLOCKED_DOMAINS` | (list) | `src/pipeline/noise.ts` | Comms/utility domains dropped before sessionization. Add domains freely. |
 | `ADULT_DOMAINS` / `JUNK_DOMAINS` | (lists) | `src/pipeline/noise.ts` | Separate lists merged at runtime; either is independently removable. |
 | `PLATFORM_STOPWORDS` | (list) | `src/pipeline/keywords.ts` | Social-platform brand and UI tokens excluded from keyword extraction. |
+| `BATCH_SIZE` / `MAX_TOKENS_PER_BATCH` | `10` / `4000` | `src/pipeline/label.ts` | Threads per AI-labeling request and the output budget per request. Lower `BATCH_SIZE` if responses get truncated on very large thread sets. |
+| Assistant effort → `max_tokens` | Low `512` / Medium `1024` / High `2048` | `src/dashboard/Assistant.tsx` | Maps the chat's Low/Medium/High "Effort" selector to a response-depth budget. |
 
 ## Project structure
 
 ```
 openloops/
 ├── public/
-│   └── openloops-logo.svg
+│   └── openloops-logo.png
 ├── src/
 │   ├── background.ts          # service worker: install hook + live capture
 │   ├── types.ts               # shared TypeScript interfaces
 │   ├── db/
-│   │   └── index.ts           # IndexedDB schema + all store helpers
+│   │   └── index.ts           # IndexedDB schema + helpers (raw_events, sessions, intent_threads, domain_brands)
 │   ├── lib/
-│   │   ├── settings.ts        # chrome.storage.local API-key helpers
-│   │   └── util.ts            # isHttpUrl, extractDomain, hashId
+│   │   ├── settings.ts        # chrome.storage.local: API keys, assistant model + effort
+│   │   └── util.ts            # isHttpUrl, isLocalHost, extractDomain, hashId
 │   ├── pipeline/
 │   │   ├── backfill.ts        # history API backfill
-│   │   ├── noise.ts           # domain blocklist + title filter
+│   │   ├── noise.ts           # domain blocklist + title filter + local-host filter
 │   │   ├── keywords.ts        # keyword extraction + stopword lists
 │   │   ├── sessions.ts        # gap-based segmentation
 │   │   ├── ambient.ts         # ubiquity-based ambient domain detector
 │   │   ├── threads.ts         # clustering + scoring
-│   │   └── label.ts           # opt-in AI labeling (Claude Haiku 4.5)
+│   │   ├── enrich.ts          # opt-in brand enrichment (context.dev)
+│   │   └── label.ts           # opt-in AI labeling + next steps (Claude)
 │   └── dashboard/
 │       ├── index.html
 │       ├── main.tsx
-│       ├── App.tsx            # React dashboard
+│       ├── App.tsx            # React dashboard — rail, intent map, overview
+│       ├── Assistant.tsx      # AI assistant chat
 │       └── app.css
 ├── manifest.json
 ├── vite.config.ts
 ├── tsconfig.json
-├── CLAUDE.md                  # architecture notes for AI-assisted development
 ├── CONTRIBUTING.md
 └── LICENSE
 ```
@@ -222,24 +255,26 @@ There is **no `.env` file** and no environment variables to set. API keys are pa
 
 ### Two keys (optional)
 
-Both enrichment features require their own key. Both are optional; the app is fully functional without either.
+Both keys are optional, and the app is fully functional without either — context.dev in particular is an enhancement, not a requirement.
 
 | Feature | Key source | Where to paste it | Free tier |
 |---|---|---|---|
-| AI thread labeling | [console.anthropic.com](https://console.anthropic.com) — create an API key | **INTELLIGENCE** panel in the left rail → "sk-ant-…" input | Yes (usage-based, starts free) |
-| Brand enrichment | [context.dev](https://context.dev) — sign up for an API key | **INTELLIGENCE** panel in the left rail → context.dev key input | Yes |
+| AI labeling, next steps, and the assistant chat | [console.anthropic.com](https://console.anthropic.com/settings/keys) — "Get an Anthropic API key →" link in the UI | **INTELLIGENCE** panel in the left rail → Anthropic key input | Yes (usage-based, starts free) |
+| Brand enrichment (optional) | [context.dev](https://www.context.dev/login) — "Get a context.dev API key →" link in the UI | **INTELLIGENCE** panel in the left rail → context.dev key input | Yes |
 
-Paste a key, click **Save key**, then click the corresponding action button. Keys are persisted across sessions in `chrome.storage.local` — you only need to paste them once.
+Paste a key, click **Save key**, then click **Label & enrich**. With only the Anthropic key saved, labeling runs without enrichment. Keys are persisted across sessions in `chrome.storage.local` — you only need to paste them once.
 
 ## Usage
 
-1. Click the openloops toolbar icon (or navigate to the extension's options page) to open the dashboard.
-2. **Scan my history** — backfills 14 days of browsing into IndexedDB.
-3. **Build sessions** — segments events into sessions and extracts keywords.
-4. **Build intent map** — clusters sessions into threads and scores them.
-5. *(Optional)* Paste your Anthropic API key → **Save key** → **Label with AI** — rewrites thread titles and adds one-sentence summaries via Claude Haiku 4.5.
+1. Click the openloops toolbar icon to open the dashboard.
+2. On first run, a centered welcome screen walks you through the pipeline — its CTA always points at the next step.
+3. **Scan my history** — backfills 14 days of browsing into IndexedDB.
+4. **Build sessions** — segments events into sessions and extracts keywords.
+5. **Build intent map** — clusters sessions into threads, scores them, and groups them by status.
+6. *(Optional)* Add your Anthropic key (and a context.dev key for richer titles) in the INTELLIGENCE panel, then click **Label & enrich** — rewrites titles, adds summaries and next steps, and pulls in logos and brand colors.
+7. Click **Resume** on a thread to reopen the pages you left off on, or click a card to focus the AI assistant and ask how to finish it.
 
-Run steps 2–4 again any time to rebuild from scratch with the latest browsing data.
+Run steps 3–5 again any time to rebuild from scratch with the latest browsing data.
 
 ## Tech
 
@@ -247,12 +282,9 @@ Run steps 2–4 again any time to rebuild from scratch with the latest browsing 
 - **[Vite](https://vitejs.dev/) + [@crxjs/vite-plugin](https://crxjs.dev/vite-plugin)** — build and HMR for Manifest V3 extensions
 - **[React 18](https://react.dev/)** — dashboard UI (full Chrome tab via `options_page`)
 - **[idb](https://github.com/jakearchibald/idb)** — typed IndexedDB wrapper
+- **[react-markdown](https://github.com/remarkjs/react-markdown)** — renders the AI assistant's responses
 - **[context.dev](https://context.dev)** — optional brand intelligence / enrichment layer: resolves domain names into company records (name, industry, description, logo, brand color)
-- **[Claude Haiku 4.5](https://www.anthropic.com/)** — optional AI thread labeling, grounded by enriched company descriptions (bring your own key)
+- **[Claude](https://www.anthropic.com/)** — optional AI thread labeling (batched, grounded by enriched company descriptions, adds a next step per thread) and the AI assistant chat (model-selectable: Haiku 4.5, Sonnet 4.6, Opus 4.6, Opus 4.7, Opus 4.8) — bring your own key
 - Chrome Extension **Manifest V3** — service worker, `history`/`tabs`/`storage` permissions
-
-## Screenshot
-
-> *Drop a screenshot or GIF of the dashboard here once it's ready.*
 
 MIT License — see [LICENSE](./LICENSE).
