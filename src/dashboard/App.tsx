@@ -5,6 +5,7 @@ import { buildThreads } from "../pipeline/threads";
 import { labelThreads } from "../pipeline/label";
 import { enrichDomains } from "../pipeline/enrich";
 import { getApiKey, setApiKey, getContextKey, setContextKey } from "../lib/settings";
+import Assistant from "./Assistant";
 import {
   getEventCount,
   getRecentEvents,
@@ -279,16 +280,18 @@ function SessionRow({ session }: { session: Session }) {
 }
 
 // ---------------------------------------------------------------------------
-// Overview panel (right column)
+// Overview stats (right column, above the assistant)
 // ---------------------------------------------------------------------------
 
-interface OverviewPanelProps {
+interface OverviewStatsProps {
   eventCount: number | null;
   sessionCount: number | null;
   threads: IntentThread[];
 }
 
-function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps) {
+function OverviewStats({ eventCount, sessionCount, threads }: OverviewStatsProps) {
+  const [statsOpen, setStatsOpen] = useState(false);
+
   const totalThreads = threads.length;
 
   const statusCounts = {
@@ -326,23 +329,24 @@ function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps
     totalThreads > 0 ? `${Math.round((count / totalThreads) * 100)}%` : "0%";
 
   return (
-    <aside className="overview-panel">
+    <div className="overview-stats">
       <div className="overview-eyebrow">Overview</div>
 
-      <div className="overview-section">
-        <div className="overview-stat">
+      {/* Compact totals row */}
+      <div className="overview-totals-row">
+        <div className="overview-stat-compact">
           <span className="overview-stat-value">
             {eventCount !== null && eventCount > 0 ? eventCount.toLocaleString() : "—"}
           </span>
           <span className="overview-stat-label">events</span>
         </div>
-        <div className="overview-stat">
+        <div className="overview-stat-compact">
           <span className="overview-stat-value">
             {sessionCount !== null && sessionCount > 0 ? sessionCount.toLocaleString() : "—"}
           </span>
           <span className="overview-stat-label">sessions</span>
         </div>
-        <div className="overview-stat">
+        <div className="overview-stat-compact">
           <span className="overview-stat-value">
             {totalThreads > 0 ? totalThreads.toLocaleString() : "—"}
           </span>
@@ -350,49 +354,61 @@ function OverviewPanel({ eventCount, sessionCount, threads }: OverviewPanelProps
         </div>
       </div>
 
-      {totalThreads > 0 && (
-        <div className="overview-section">
-          <div className="overview-section-label">Status</div>
-          {(["active", "stalled", "dormant"] as const).map((s) => (
-            <div key={s} className="overview-status-row">
-              <span className="overview-status-name">{s.toUpperCase()}</span>
-              <div className="overview-status-track">
-                <div
-                  className={`overview-status-fill overview-status-fill-${s}`}
-                  style={{ width: barWidth(statusCounts[s]) }}
-                />
+      {/* Detailed stats — collapsed by default */}
+      <div className="overview-stats-disclosure">
+        <button type="button" className="collapsible-header" onClick={() => setStatsOpen((v) => !v)}>
+          <span className="collapsible-title">Stats</span>
+          <span className="collapsible-chevron">{statsOpen ? "▲" : "▼"}</span>
+        </button>
+
+        {statsOpen && (
+          <div className="overview-stats-body">
+            {totalThreads > 0 && (
+              <div className="overview-section">
+                <div className="overview-section-label">Status</div>
+                {(["active", "stalled", "dormant"] as const).map((s) => (
+                  <div key={s} className="overview-status-row">
+                    <span className="overview-status-name">{s.toUpperCase()}</span>
+                    <div className="overview-status-track">
+                      <div
+                        className={`overview-status-fill overview-status-fill-${s}`}
+                        style={{ width: barWidth(statusCounts[s]) }}
+                      />
+                    </div>
+                    <span className="overview-status-count">{statusCounts[s]}</span>
+                  </div>
+                ))}
               </div>
-              <span className="overview-status-count">{statusCounts[s]}</span>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
 
-      {topDomains.length > 0 && (
-        <div className="overview-section">
-          <div className="overview-section-label">Top Domains</div>
-          {topDomains.map(([domain, stats]) => (
-            <div key={domain} className="overview-domain-row">
-              <span className="overview-domain-name">{domain}</span>
-              <span className="overview-domain-stats">
-                {stats.events}ev · {stats.threads}th
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+            {topDomains.length > 0 && (
+              <div className="overview-section">
+                <div className="overview-section-label">Top Domains</div>
+                {topDomains.map(([domain, stats]) => (
+                  <div key={domain} className="overview-domain-row">
+                    <span className="overview-domain-name">{domain}</span>
+                    <span className="overview-domain-stats">
+                      {stats.events}ev · {stats.threads}th
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
-      {dateStart !== null && dateEnd !== null && (
-        <div className="overview-section">
-          <div className="overview-section-label">Date Range</div>
-          <div className="overview-date-range">
-            {shortDateFmt.format(dateStart)}
-            <span className="overview-date-sep"> → </span>
-            {shortDateFmt.format(dateEnd)}
+            {dateStart !== null && dateEnd !== null && (
+              <div className="overview-section">
+                <div className="overview-section-label">Date Range</div>
+                <div className="overview-date-range">
+                  {shortDateFmt.format(dateStart)}
+                  <span className="overview-date-sep"> → </span>
+                  {shortDateFmt.format(dateEnd)}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
-    </aside>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -407,6 +423,74 @@ const STATUS_DOT_CLASS: Record<IntentThread["status"], string> = {
   stalled: "dot-stalled",
   dormant: "dot-dormant",
 };
+
+// ---------------------------------------------------------------------------
+// Pipeline button states
+// ---------------------------------------------------------------------------
+
+type PipelineState = "disabled" | "next" | "done";
+
+/**
+ * Each pipeline button is DISABLED until its input exists, NEXT (accent
+ * highlight) for the first step whose output doesn't exist yet, or DONE
+ * (normal styling, re-runnable) once its output exists.
+ */
+function pipelineStates(
+  eventCount: number | null,
+  sessionCount: number | null,
+  threadCount: number | null,
+): { scan: PipelineState; sessions: PipelineState; threads: PipelineState } {
+  const hasEvents   = (eventCount   ?? 0) > 0;
+  const hasSessions = (sessionCount ?? 0) > 0;
+  const hasThreads  = (threadCount  ?? 0) > 0;
+
+  if (!hasEvents)   return { scan: "next",   sessions: "disabled", threads: "disabled" };
+  if (!hasSessions) return { scan: "done",   sessions: "next",     threads: "disabled" };
+  if (!hasThreads)  return { scan: "done",   sessions: "done",     threads: "next" };
+  return { scan: "done", sessions: "done", threads: "done" };
+}
+
+// ---------------------------------------------------------------------------
+// WelcomeScreen — centered onboarding shown until the first intent map exists
+// ---------------------------------------------------------------------------
+
+interface WelcomeScreenProps {
+  logoUrl: string;
+  currentStep: 1 | 2 | 3;
+  ctaLabel: string;
+  ctaDisabled: boolean;
+  onCtaClick: () => void;
+}
+
+const WELCOME_STEPS = ["Scan your history", "Build sessions", "Build your intent map"];
+
+function WelcomeScreen({ logoUrl, currentStep, ctaLabel, ctaDisabled, onCtaClick }: WelcomeScreenProps) {
+  return (
+    <div className="welcome-screen">
+      <img src={logoUrl} alt="" className="welcome-logo" />
+      <h1 className="welcome-title">openloops</h1>
+      <p className="welcome-tagline">the AI intelligence for your browser history</p>
+      <p className="welcome-explainer">
+        Scans your browsing history, groups it into the things you were actually
+        trying to do, and helps you close the loop.
+      </p>
+      <ol className="welcome-steps">
+        {WELCOME_STEPS.map((label, i) => (
+          <li
+            key={label}
+            className={`welcome-step${i + 1 === currentStep ? " welcome-step-active" : ""}`}
+          >
+            <span className="welcome-step-number">{i + 1}</span>
+            <span className="welcome-step-label">{label}</span>
+          </li>
+        ))}
+      </ol>
+      <button type="button" className="welcome-cta" onClick={onCtaClick} disabled={ctaDisabled}>
+        {ctaLabel}
+      </button>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // App
@@ -579,6 +663,33 @@ export default function App() {
     statusGroups.map(({ status, items }) => [status, items.length])
   ) as Record<IntentThread["status"], number>;
 
+  const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
+
+  const { scan: scanState, sessions: sessionsState, threads: threadsState } =
+    pipelineStates(eventCount, sessionCount, threadCount);
+
+  // The welcome screen's single CTA mirrors whichever rail action is NEXT.
+  let welcomeStep: 1 | 2 | 3 = 1;
+  let welcomeCtaLabel = "Scan my history";
+  let welcomeCtaDisabled = false;
+  let welcomeCtaClick = handleScan;
+  if (scanState === "next") {
+    welcomeStep = 1;
+    welcomeCtaLabel = scanning ? "Scanning…" : "Scan my history";
+    welcomeCtaDisabled = scanning;
+    welcomeCtaClick = handleScan;
+  } else if (sessionsState === "next") {
+    welcomeStep = 2;
+    welcomeCtaLabel = buildingSessions ? "Building…" : "Build sessions";
+    welcomeCtaDisabled = buildingSessions;
+    welcomeCtaClick = handleBuildSessions;
+  } else if (threadsState === "next") {
+    welcomeStep = 3;
+    welcomeCtaLabel = buildingThreads ? "Building…" : "Build your intent map";
+    welcomeCtaDisabled = buildingThreads;
+    welcomeCtaClick = handleBuildThreads;
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -597,42 +708,47 @@ export default function App() {
         <div className="rail-section">
           <div className="rail-eyebrow">Pipeline</div>
 
-          <button type="button" className="rail-action" onClick={handleScan} disabled={scanning}>
+          <button
+            type="button"
+            className={`rail-action${scanState === "next" ? " rail-action-accent" : ""}`}
+            onClick={handleScan}
+            disabled={scanning}
+          >
             <span className="rail-action-label">
               {scanning ? "Scanning…" : "Scan my history"}
             </span>
             <span className="rail-action-count">
-              {eventCount !== null && eventCount > 0
+              {scanState === "done" && eventCount
                 ? `${eventCount.toLocaleString()} events` : "—"}
             </span>
           </button>
 
           <button
             type="button"
-            className="rail-action"
+            className={`rail-action${sessionsState === "next" ? " rail-action-accent" : ""}`}
             onClick={handleBuildSessions}
-            disabled={buildingSessions || !eventCount}
+            disabled={buildingSessions || sessionsState === "disabled"}
           >
             <span className="rail-action-label">
               {buildingSessions ? "Building…" : "Build sessions"}
             </span>
             <span className="rail-action-count">
-              {sessionCount !== null && sessionCount > 0
+              {sessionsState === "done" && sessionCount
                 ? `${sessionCount.toLocaleString()} sessions` : "—"}
             </span>
           </button>
 
           <button
             type="button"
-            className="rail-action rail-action-accent"
+            className={`rail-action${threadsState === "next" ? " rail-action-accent" : ""}`}
             onClick={handleBuildThreads}
-            disabled={buildingThreads || !sessionCount}
+            disabled={buildingThreads || threadsState === "disabled"}
           >
             <span className="rail-action-label">
               {buildingThreads ? "Building…" : "Build intent map"}
             </span>
             <span className="rail-action-count">
-              {threadCount !== null && threadCount > 0
+              {threadsState === "done" && threadCount
                 ? `${threadCount.toLocaleString()} thread${threadCount !== 1 ? "s" : ""}` : "—"}
             </span>
           </button>
@@ -721,22 +837,17 @@ export default function App() {
 
       {/* ── Main column ── */}
       <main className="main-col">
-        <header className="app-header">
-          <img src={logoUrl} alt="openloops" className="header-logo" />
-          <div>
-            <h1 className="app-title">openloops</h1>
-            <p className="app-subtitle">the decisions you started and never closed</p>
-          </div>
-        </header>
-
-        {/* Intent map grouped by status */}
-        <div className="intent-map">
-          {threads.length === 0 ? (
-            <p className="empty-state">
-              Run the pipeline to see your intent threads.
-            </p>
-          ) : (
-            statusGroups.map(({ status, items }) => {
+        {threadCount === 0 || threadCount === null ? (
+          <WelcomeScreen
+            logoUrl={logoUrl}
+            currentStep={welcomeStep}
+            ctaLabel={welcomeCtaLabel}
+            ctaDisabled={welcomeCtaDisabled}
+            onCtaClick={welcomeCtaClick}
+          />
+        ) : (
+          <div className="intent-map">
+            {statusGroups.map(({ status, items }) => {
               if (!visibleStatuses.has(status) || items.length === 0) return null;
               return (
                 <section key={status} className="status-group">
@@ -760,9 +871,9 @@ export default function App() {
                   </ul>
                 </section>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
 
         {/* Pipeline detail — collapsible */}
         <div className="pipeline-detail">
@@ -840,12 +951,22 @@ export default function App() {
         </footer>
       </main>
 
-      {/* ── Right overview panel ── */}
-      <OverviewPanel
-        eventCount={eventCount}
-        sessionCount={sessionCount}
-        threads={threads}
-      />
+      {/* ── Right column: condensed stats + assistant ── */}
+      <aside className="overview-panel">
+        <OverviewStats
+          eventCount={eventCount}
+          sessionCount={sessionCount}
+          threads={threads}
+        />
+        <Assistant
+          threads={threads}
+          brands={brands}
+          selectedThread={selectedThread}
+          apiKey={apiKey}
+          keySaved={keySaved}
+          onClearFocus={() => setSelectedThreadId(null)}
+        />
+      </aside>
     </div>
   );
 }
