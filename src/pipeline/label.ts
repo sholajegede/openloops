@@ -1,0 +1,123 @@
+import { getAllThreads, putThreads } from "../db/index";
+import type { IntentThread } from "../types";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ThreadDescriptor {
+  id: string;
+  keywords: string[];
+  domains: string[];
+  sampleTitles: string[];
+}
+
+interface LabelResult {
+  id: string;
+  title: string;
+  summary: string;
+  type: string;
+}
+
+const VALID_TYPES: ReadonlySet<IntentThread["type"]> = new Set([
+  "buying",
+  "research",
+  "learning",
+  "planning",
+  "unclassified",
+]);
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Send all stored threads to Claude Haiku in a single batched request and
+ * write AI-generated titles, summaries, and types back to IndexedDB.
+ *
+ * Uses raw fetch() because the Anthropic TypeScript SDK does not support
+ * browser/extension environments. The `anthropic-dangerous-direct-browser-access`
+ * header is required for any browser-originated call to api.anthropic.com.
+ *
+ * @throws Error with a human-readable message (includes "Invalid API key" on 401)
+ */
+export async function labelThreads(apiKey: string): Promise<{ labeled: number }> {
+  const threads = await getAllThreads();
+  if (threads.length === 0) return { labeled: 0 };
+
+  // Build compact descriptors — only what Claude needs to understand each thread.
+  const descriptors: ThreadDescriptor[] = threads.map((t) => {
+    const keywords = [...new Set(t.sessions.flatMap((s) => s.keywords))].slice(0, 8);
+    const domains  = [...new Set(t.sessions.flatMap((s) => s.domains))].slice(0, 5);
+    const titles   = [...new Set(t.sessions.flatMap((s) => s.events.map((e) => e.title)))].slice(0, 20);
+    return { id: t.id, keywords, domains, sampleTitles: titles };
+  });
+
+  const systemPrompt = `You label browsing intent threads. Return ONLY a JSON array — no markdown fences, no explanation.
+Each element: { "id": "<thread id>", "title": "<3-6 word title>", "summary": "<1 sentence>", "type": "<buying|research|learning|planning|unclassified>" }
+Respond with exactly one array covering every thread in the request.`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: JSON.stringify(descriptors),
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Invalid API key. Check your Anthropic API key and try again.");
+    }
+    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const raw: string = data.content[0].text;
+
+  // Strip optional ```json fences before parsing.
+  const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+  let results: LabelResult[];
+  try {
+    results = JSON.parse(cleaned);
+  } catch {
+    throw new Error("Could not parse AI response. The model returned unexpected output.");
+  }
+
+  // Build a lookup by thread id for O(1) merging.
+  const byId = new Map(results.map((r) => [r.id, r]));
+
+  let labeled = 0;
+  const updated = threads.map((t) => {
+    const label = byId.get(t.id);
+    if (!label) return t;
+
+    const type = VALID_TYPES.has(label.type as IntentThread["type"])
+      ? (label.type as IntentThread["type"])
+      : t.type;
+
+    labeled++;
+    return {
+      ...t,
+      title:   label.title   || t.title,
+      summary: label.summary || undefined,
+      type,
+    };
+  });
+
+  await putThreads(updated);
+  return { labeled };
+}

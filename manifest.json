@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "openloops",
+  "version": "0.0.1",
+  "description": "Reconstruct your browsing history into the decisions you started and never closed. Fully local.",
+
+  "permissions": ["history", "tabs", "storage"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
+
+  "options_page": "src/dashboard/index.html",
+
+  "action": {
+    "default_title": "Open Signal"
+  }
+}
